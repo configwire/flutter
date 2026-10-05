@@ -18,14 +18,11 @@ Once published:
 flutter pub add configwire_flutter
 ```
 
-Path-dev reality (publish is still pending): depend on it by path, and
-keep the checkout layout intact, because this package itself wires
-`configwire` via `path: ../dart`:
+Or pin it in your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  configwire_flutter:
-    path: ../configwire/client/flutter
+  configwire_flutter: ^0.0.1
 ```
 
 Then `flutter pub get`.

@@ -1,7 +1,9 @@
 name: configwire_flutter
 description: "A new Flutter package project."
 version: 0.0.1
-homepage:
+homepage: https://github.com/configwire/flutter
+repository: https://github.com/configwire/flutter
+issue_tracker: https://github.com/configwire/flutter/issues
 
 environment:
   sdk: ^3.13.3
@@ -10,8 +12,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  configwire:
-    path: ../dart
+  configwire: ^0.2.0
   shared_preferences: ^2.5.5
   package_info_plus: ^10.2.2
 
