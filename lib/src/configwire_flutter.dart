@@ -110,8 +110,7 @@ abstract final class ConfigWireFlutter {
       baseUrl: baseUrl,
       defaults: defaults,
       store: store,
-      minimumFetchInterval:
-          minimumFetchInterval ?? const Duration(hours: 12),
+      minimumFetchInterval: minimumFetchInterval ?? const Duration(hours: 12),
       fetchTimeout: fetchTimeout ?? const Duration(seconds: 60),
       verbose: verbose,
     );

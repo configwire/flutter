@@ -83,36 +83,48 @@ DeviceTargetingCollector collector({
 
 void main() {
   group('platform normalization', () {
-    test('maps every TargetPlatform to the server platform vocabulary',
-        () async {
-      const expected = {
-        TargetPlatform.android: 'android',
-        TargetPlatform.iOS: 'ios',
-        TargetPlatform.macOS: 'macos',
-        TargetPlatform.windows: 'windows',
-        TargetPlatform.linux: 'linux',
-        TargetPlatform.fuchsia: 'fuchsia',
-      };
-      for (final entry in expected.entries) {
-        final targeting = await collector(platform: entry.key)
-            .resolveDeviceTargeting('', {});
-        expect(targeting.platform, entry.value,
-            reason: 'platform ${entry.key}');
-      }
-    });
+    test(
+      'maps every TargetPlatform to the server platform vocabulary',
+      () async {
+        const expected = {
+          TargetPlatform.android: 'android',
+          TargetPlatform.iOS: 'ios',
+          TargetPlatform.macOS: 'macos',
+          TargetPlatform.windows: 'windows',
+          TargetPlatform.linux: 'linux',
+          TargetPlatform.fuchsia: 'fuchsia',
+        };
+        for (final entry in expected.entries) {
+          final targeting = await collector(
+            platform: entry.key,
+          ).resolveDeviceTargeting('', {});
+          expect(
+            targeting.platform,
+            entry.value,
+            reason: 'platform ${entry.key}',
+          );
+        }
+      },
+    );
 
     test('isWeb forces web regardless of the host platform', () async {
       for (final platform in TargetPlatform.values) {
-        final targeting = await collector(platform: platform, isWeb: true)
-            .resolveDeviceTargeting('', {});
-        expect(targeting.platform, 'web',
-            reason: 'platform $platform with isWeb=true');
+        final targeting = await collector(
+          platform: platform,
+          isWeb: true,
+        ).resolveDeviceTargeting('', {});
+        expect(
+          targeting.platform,
+          'web',
+          reason: 'platform $platform with isWeb=true',
+        );
       }
     });
 
     test('fuchsia is covered and sent as a platform value', () async {
-      final targeting = await collector(platform: TargetPlatform.fuchsia)
-          .resolveDeviceTargeting('', {});
+      final targeting = await collector(
+        platform: TargetPlatform.fuchsia,
+      ).resolveDeviceTargeting('', {});
       expect(targeting.platform, 'fuchsia');
       expect(targeting.toQueryParameters()['platform'], 'fuchsia');
     });
@@ -140,8 +152,7 @@ void main() {
       expect(targeting.appVersion, '1.2.3');
     });
 
-    test('server can strict-semver-compare the normalized version',
-        () async {
+    test('server can strict-semver-compare the normalized version', () async {
       final targeting = await collector(
         packageInfo: FakePackageInfo('1.0.0+1'),
       ).resolveDeviceTargeting('', {});
@@ -188,19 +199,15 @@ void main() {
     });
 
     test('userId passes through untouched', () async {
-      final targeting = await collector().resolveDeviceTargeting(
-        'user-7',
-        {},
-      );
+      final targeting = await collector().resolveDeviceTargeting('user-7', {});
       expect(targeting.userId, 'user-7');
       expect(targeting.toQueryParameters()['uid'], 'user-7');
     });
 
     test('customAttrs survive untouched', () async {
-      final targeting = await collector().resolveDeviceTargeting(
-        '',
-        {'plan': 'pro'},
-      );
+      final targeting = await collector().resolveDeviceTargeting('', {
+        'plan': 'pro',
+      });
       // Exact equality: no auto keys may be added.
       expect(targeting.customAttrs, {'plan': 'pro'});
     });
@@ -208,19 +215,15 @@ void main() {
     test('customAttrs are copied, never enriched', () async {
       final targeting = await collector(
         platform: TargetPlatform.iOS,
-      ).resolveDeviceTargeting(
-        '',
-        {'plan': 'pro', 'seats': 5},
-      );
+      ).resolveDeviceTargeting('', {'plan': 'pro', 'seats': 5});
       expect(targeting.customAttrs, {'plan': 'pro', 'seats': 5});
       expect(targeting.toQueryParameters()['attrs'], contains('pro'));
     });
 
     test('identity rides alongside auto-collected device fields', () async {
-      final targeting = await collector().resolveDeviceTargeting(
-        'user-7',
-        {'plan': 'pro'},
-      );
+      final targeting = await collector().resolveDeviceTargeting('user-7', {
+        'plan': 'pro',
+      });
       expect(targeting.userId, 'user-7');
       expect(targeting.customAttrs, {'plan': 'pro'});
       expect(targeting.platform, 'android');
@@ -240,10 +243,9 @@ void main() {
         c.resolveDeviceTargeting('user-7', {'plan': 'pro'}),
         completes,
       );
-      final targeting = await c.resolveDeviceTargeting(
-        'user-7',
-        {'plan': 'pro'},
-      );
+      final targeting = await c.resolveDeviceTargeting('user-7', {
+        'plan': 'pro',
+      });
       // Platform is param-derived, so it survives; every plugin-derived
       // field degrades to empty while the caller identity is preserved.
       expect(targeting.userId, 'user-7');

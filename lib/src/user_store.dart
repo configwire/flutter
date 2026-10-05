@@ -83,8 +83,5 @@ String defaultIdGenerator() => generateUserId();
 String generateUserId([Random? source]) {
   const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
   final r = source ?? Random.secure();
-  return List.generate(
-    15,
-    (_) => alphabet[r.nextInt(alphabet.length)],
-  ).join();
+  return List.generate(15, (_) => alphabet[r.nextInt(alphabet.length)]).join();
 }

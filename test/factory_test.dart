@@ -65,54 +65,58 @@ void main() {
     await cw.dispose();
   });
 
-  test('returned ConfigWire is usable: defaults fallback + version 0',
-      () async {
-    final cw = await ConfigWireFlutter.createConfigWire(
-      apiKey: 'sk-test',
-      env: 'dev',
-      baseUrl: 'http://127.0.0.1:8090',
-      defaults: const {'launch_flag': true, 'retries': 2},
-      collectDevice: false,
-      ensureInitialized: false,
-    );
-    expect(cw.getBool('launch_flag'), isTrue);
-    expect(cw.getInt('retries'), 2);
-    expect(cw.getBool('missing_flag'), isNull);
-    expect(cw.targeting.userId, matches(simpleId));
-    expect(cw.version, 0);
-    await cw.dispose();
-  });
+  test(
+    'returned ConfigWire is usable: defaults fallback + version 0',
+    () async {
+      final cw = await ConfigWireFlutter.createConfigWire(
+        apiKey: 'sk-test',
+        env: 'dev',
+        baseUrl: 'http://127.0.0.1:8090',
+        defaults: const {'launch_flag': true, 'retries': 2},
+        collectDevice: false,
+        ensureInitialized: false,
+      );
+      expect(cw.getBool('launch_flag'), isTrue);
+      expect(cw.getInt('retries'), 2);
+      expect(cw.getBool('missing_flag'), isNull);
+      expect(cw.targeting.userId, matches(simpleId));
+      expect(cw.version, 0);
+      await cw.dispose();
+    },
+  );
 
-  test('default first launch generates a simple ID + persists; relaunch restores',
-      () async {
-    var cw = await ConfigWireFlutter.createConfigWire(
-      apiKey: 'sk-test',
-      env: 'dev',
-      baseUrl: 'http://127.0.0.1:8090',
-      collectDevice: false,
-      ensureInitialized: false,
-    );
-    expect(cw.targeting.userId, matches(simpleId));
-    expect(cw.targeting.toQueryParameters()['uid'], cw.targeting.userId);
-    final generated = cw.targeting.userId;
-    // Persisted under the default key.
-    expect(
-      await loadPersistedUserId(prefs: SharedPreferencesAsync(), env: 'dev'),
-      generated,
-    );
-    await cw.dispose();
+  test(
+    'default first launch generates a simple ID + persists; relaunch restores',
+    () async {
+      var cw = await ConfigWireFlutter.createConfigWire(
+        apiKey: 'sk-test',
+        env: 'dev',
+        baseUrl: 'http://127.0.0.1:8090',
+        collectDevice: false,
+        ensureInitialized: false,
+      );
+      expect(cw.targeting.userId, matches(simpleId));
+      expect(cw.targeting.toQueryParameters()['uid'], cw.targeting.userId);
+      final generated = cw.targeting.userId;
+      // Persisted under the default key.
+      expect(
+        await loadPersistedUserId(prefs: SharedPreferencesAsync(), env: 'dev'),
+        generated,
+      );
+      await cw.dispose();
 
-    // Relaunch with no override restores the same generated ID.
-    cw = await ConfigWireFlutter.createConfigWire(
-      apiKey: 'sk-test',
-      env: 'dev',
-      baseUrl: 'http://127.0.0.1:8090',
-      collectDevice: false,
-      ensureInitialized: false,
-    );
-    expect(cw.targeting.userId, generated);
-    await cw.dispose();
-  });
+      // Relaunch with no override restores the same generated ID.
+      cw = await ConfigWireFlutter.createConfigWire(
+        apiKey: 'sk-test',
+        env: 'dev',
+        baseUrl: 'http://127.0.0.1:8090',
+        collectDevice: false,
+        ensureInitialized: false,
+      );
+      expect(cw.targeting.userId, generated);
+      await cw.dispose();
+    },
+  );
 
   test('custom idGenerator supplies the first-run ID and is pinned', () async {
     var calls = 0;
@@ -234,52 +238,56 @@ void main() {
     await cw.dispose();
   });
 
-  test('idGenerator returning empty stays anonymous and pins nothing',
-      () async {
-    var cw = await ConfigWireFlutter.createConfigWire(
-      apiKey: 'sk-test',
-      env: 'dev',
-      baseUrl: 'http://127.0.0.1:8090',
-      idGenerator: () => '',
-      collectDevice: false,
-      ensureInitialized: false,
-    );
-    expect(cw.targeting.userId, isEmpty);
-    expect(cw.targeting.toQueryParameters(), isNot(contains('uid')));
-    expect(
-      await loadPersistedUserId(prefs: SharedPreferencesAsync(), env: 'dev'),
-      isNull,
-    );
-    await cw.dispose();
+  test(
+    'idGenerator returning empty stays anonymous and pins nothing',
+    () async {
+      var cw = await ConfigWireFlutter.createConfigWire(
+        apiKey: 'sk-test',
+        env: 'dev',
+        baseUrl: 'http://127.0.0.1:8090',
+        idGenerator: () => '',
+        collectDevice: false,
+        ensureInitialized: false,
+      );
+      expect(cw.targeting.userId, isEmpty);
+      expect(cw.targeting.toQueryParameters(), isNot(contains('uid')));
+      expect(
+        await loadPersistedUserId(prefs: SharedPreferencesAsync(), env: 'dev'),
+        isNull,
+      );
+      await cw.dispose();
 
-    // Nothing pinned, so the next launch generates a fresh install ID.
-    cw = await ConfigWireFlutter.createConfigWire(
-      apiKey: 'sk-test',
-      env: 'dev',
-      baseUrl: 'http://127.0.0.1:8090',
-      collectDevice: false,
-      ensureInitialized: false,
-    );
-    expect(cw.targeting.userId, matches(simpleId));
-    await cw.dispose();
-  });
+      // Nothing pinned, so the next launch generates a fresh install ID.
+      cw = await ConfigWireFlutter.createConfigWire(
+        apiKey: 'sk-test',
+        env: 'dev',
+        baseUrl: 'http://127.0.0.1:8090',
+        collectDevice: false,
+        ensureInitialized: false,
+      );
+      expect(cw.targeting.userId, matches(simpleId));
+      await cw.dispose();
+    },
+  );
 
-  test('custom idGenerator under a custom prefix writes under that prefix',
-      () async {
-    final cw = await ConfigWireFlutter.createConfigWire(
-      apiKey: 'sk-test',
-      env: 'dev',
-      baseUrl: 'http://127.0.0.1:8090',
-      idGenerator: () => 'user-9',
-      prefixCache: 'myapp',
-      ensureInitialized: false,
-    );
-    expect(cw.targeting.userId, 'user-9');
-    final prefs = SharedPreferencesAsync();
-    expect(await prefs.getString('myapp.dev.userId'), 'user-9');
-    expect(await prefs.getString('configwire.dev.userId'), isNull);
-    await cw.dispose();
-  });
+  test(
+    'custom idGenerator under a custom prefix writes under that prefix',
+    () async {
+      final cw = await ConfigWireFlutter.createConfigWire(
+        apiKey: 'sk-test',
+        env: 'dev',
+        baseUrl: 'http://127.0.0.1:8090',
+        idGenerator: () => 'user-9',
+        prefixCache: 'myapp',
+        ensureInitialized: false,
+      );
+      expect(cw.targeting.userId, 'user-9');
+      final prefs = SharedPreferencesAsync();
+      expect(await prefs.getString('myapp.dev.userId'), 'user-9');
+      expect(await prefs.getString('configwire.dev.userId'), isNull);
+      await cw.dispose();
+    },
+  );
 
   test('generateUserId produces unique simple IDs', () {
     final seen = <String>{generateUserId(), generateUserId()};

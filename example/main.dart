@@ -16,8 +16,6 @@ Future<void> main() async {
   assert(cw.getBool('launch_flag') == false);
   // NOTE: values printed, apiKey never printed.
   // ignore: avoid_print
-  print(
-    'launch_flag=${cw.getBool('launch_flag')} targeting=${cw.targeting}',
-  );
+  print('launch_flag=${cw.getBool('launch_flag')} targeting=${cw.targeting}');
   await cw.dispose();
 }

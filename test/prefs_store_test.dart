@@ -128,17 +128,11 @@ void main() {
       SharedPreferencesAsyncPlatform.instance =
           InMemorySharedPreferencesAsync.empty();
       final prefs = SharedPreferencesAsync();
-      final store = SharedPreferencesCacheStore(
-        prefs: prefs,
-        env: 'a/b c',
-      );
+      final store = SharedPreferencesCacheStore(prefs: prefs, env: 'a/b c');
 
       await store.save(fixture());
 
-      expect(
-        await prefs.getString('configwire.a%2Fb%20c.cache'),
-        isNotNull,
-      );
+      expect(await prefs.getString('configwire.a%2Fb%20c.cache'), isNotNull);
       final loaded = await store.load();
       expect(loaded, isNotNull);
       expectSameCacheData(loaded!, fixture());

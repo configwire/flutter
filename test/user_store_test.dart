@@ -43,10 +43,7 @@ void main() {
 
       // Key asserted namespaced per env with the default prefix.
       expect(await prefs.getString('configwire.dev.userId'), 'user-7');
-      expect(
-        await loadPersistedUserId(prefs: prefs, env: 'dev'),
-        'user-7',
-      );
+      expect(await loadPersistedUserId(prefs: prefs, env: 'dev'), 'user-7');
     });
 
     test('missing key loads null without throwing', () async {
@@ -54,10 +51,7 @@ void main() {
           InMemorySharedPreferencesAsync.empty();
 
       await expectLater(
-        loadPersistedUserId(
-          prefs: SharedPreferencesAsync(),
-          env: 'dev',
-        ),
+        loadPersistedUserId(prefs: SharedPreferencesAsync(), env: 'dev'),
         completion(isNull),
       );
     });
@@ -85,10 +79,7 @@ void main() {
         'user-7',
       );
       // Default prefix sees nothing.
-      expect(
-        await loadPersistedUserId(prefs: prefs, env: 'dev'),
-        isNull,
-      );
+      expect(await loadPersistedUserId(prefs: prefs, env: 'dev'), isNull);
     });
 
     test('env is URI-encoded in the default key', () async {
@@ -98,14 +89,8 @@ void main() {
 
       await savePersistedUserId(prefs: prefs, env: 'a/b c', userId: 'user-7');
 
-      expect(
-        await prefs.getString('configwire.a%2Fb%20c.userId'),
-        'user-7',
-      );
-      expect(
-        await loadPersistedUserId(prefs: prefs, env: 'a/b c'),
-        'user-7',
-      );
+      expect(await prefs.getString('configwire.a%2Fb%20c.userId'), 'user-7');
+      expect(await loadPersistedUserId(prefs: prefs, env: 'a/b c'), 'user-7');
     });
 
     test('clear removes the persisted value', () async {
@@ -114,10 +99,7 @@ void main() {
       final prefs = SharedPreferencesAsync();
 
       await savePersistedUserId(prefs: prefs, env: 'dev', userId: 'user-7');
-      expect(
-        await loadPersistedUserId(prefs: prefs, env: 'dev'),
-        'user-7',
-      );
+      expect(await loadPersistedUserId(prefs: prefs, env: 'dev'), 'user-7');
 
       await clearPersistedUserId(prefs: prefs, env: 'dev');
       expect(await loadPersistedUserId(prefs: prefs, env: 'dev'), isNull);
@@ -130,33 +112,32 @@ void main() {
         userIdKeyFor(env: 'dev', prefixCache: 'myapp'),
         'myapp.dev.userId',
       );
-      expect(
-        userIdKeyFor(env: 'a/b c'),
-        'configwire.a%2Fb%20c.userId',
-      );
+      expect(userIdKeyFor(env: 'a/b c'), 'configwire.a%2Fb%20c.userId');
     });
 
-    test('failing prefs: save/clear swallow errors, load returns null',
-        () async {
-      // Seeded only so the `_ThrowingPrefs` super-constructor finds a
-      // platform; every storage call below still throws by override.
-      SharedPreferencesAsyncPlatform.instance =
-          InMemorySharedPreferencesAsync.empty();
-      final prefs = _ThrowingPrefs();
+    test(
+      'failing prefs: save/clear swallow errors, load returns null',
+      () async {
+        // Seeded only so the `_ThrowingPrefs` super-constructor finds a
+        // platform; every storage call below still throws by override.
+        SharedPreferencesAsyncPlatform.instance =
+            InMemorySharedPreferencesAsync.empty();
+        final prefs = _ThrowingPrefs();
 
-      await expectLater(
-        savePersistedUserId(prefs: prefs, env: 'dev', userId: 'user-7'),
-        completes,
-      );
-      await expectLater(
-        clearPersistedUserId(prefs: prefs, env: 'dev'),
-        completes,
-      );
-      await expectLater(
-        loadPersistedUserId(prefs: prefs, env: 'dev'),
-        completion(isNull),
-      );
-    });
+        await expectLater(
+          savePersistedUserId(prefs: prefs, env: 'dev', userId: 'user-7'),
+          completes,
+        );
+        await expectLater(
+          clearPersistedUserId(prefs: prefs, env: 'dev'),
+          completes,
+        );
+        await expectLater(
+          loadPersistedUserId(prefs: prefs, env: 'dev'),
+          completion(isNull),
+        );
+      },
+    );
 
     test('defaultIdGenerator produces simple lowercase IDs', () {
       expect(defaultIdGenerator(), matches(RegExp(r'^[a-z0-9]{15}$')));
@@ -175,10 +156,7 @@ void main() {
         expect(id, matches(simpleId));
       }
       // Same seed reproduces the same ID.
-      expect(
-        generateUserId(Random(42)),
-        generateUserId(Random(42)),
-      );
+      expect(generateUserId(Random(42)), generateUserId(Random(42)));
     });
   });
 }
