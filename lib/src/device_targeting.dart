@@ -89,7 +89,11 @@ class DeviceTargetingCollector {
       // appVersion: strip +build metadata (server strict-semver-compares).
       var autoVersion = '';
       try {
-        autoVersion = (await _packageInfo.fetchVersion()).split('+').first;
+        autoVersion = (await _packageInfo.fetchVersion())
+            .trim()
+            .split('+')
+            .first
+            .trim();
       } catch (_) {
         autoVersion = '';
       }

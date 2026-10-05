@@ -70,7 +70,12 @@ abstract final class ConfigWireFlutter {
       prefixCache: prefixCache,
     );
     if (userId == null) {
-      final generated = idGenerator().trim();
+      String generated = '';
+      try {
+        generated = idGenerator().trim();
+      } catch (_) {
+        generated = '';
+      }
       if (generated.isNotEmpty) {
         userId = generated;
         await savePersistedUserId(
@@ -93,7 +98,10 @@ abstract final class ConfigWireFlutter {
         customAttrs ?? {},
       );
     } else {
-      targeting = Targeting(userId: userId, customAttrs: customAttrs ?? {});
+      targeting = Targeting(
+        userId: userId,
+        customAttrs: Map<String, Object?>.of(customAttrs ?? {}),
+      );
     }
 
     final cw = ConfigWire(
