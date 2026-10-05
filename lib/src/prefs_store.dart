@@ -8,7 +8,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// [CacheStore] backed by [SharedPreferencesAsync].
 ///
-/// Prefs key: `cacheKey ?? 'configwire.cache.<Uri.encodeComponent(env)>'`.
+/// Prefs key: `'<prefixCache>.<Uri.encodeComponent(env)>.cache'`
+/// (default prefix `'configwire'`, e.g. `'configwire.dev.cache'`).
 ///
 /// Divergence from [CacheStore.save]'s may-throw permission: this store
 /// swallows ALL save errors (blocked storage, denied quota, corrupt
@@ -17,9 +18,9 @@ class SharedPreferencesCacheStore implements CacheStore {
   SharedPreferencesCacheStore({
     required SharedPreferencesAsync prefs,
     required String env,
-    String? cacheKey,
+    String prefixCache = 'configwire',
   }) : _prefs = prefs,
-       _key = cacheKey ?? 'configwire.cache.${Uri.encodeComponent(env)}';
+       _key = '$prefixCache.${Uri.encodeComponent(env)}.cache';
 
   final SharedPreferencesAsync _prefs;
   final String _key;

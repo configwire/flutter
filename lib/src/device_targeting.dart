@@ -51,10 +51,10 @@ class _PackageInfoVersionReader implements AppVersionReader {
 ///   anywhere, so the Web build compiles.
 /// * `appVersion` strips `+build` metadata for strict-semver compare.
 /// * Locale via [Locale.toLanguageTag]; country from `countryCode`.
-/// * Merge: explicit non-empty scalars win per-field; customAttrs comes
-///   from the explicit input; `userId` is explicit-only.
+/// * [userId] and [customAttrs] pass through untouched (a defensive copy
+///   for the map); no device keys are ever added to `customAttrs`.
 /// * Never throws: each seam failure degrades its field; the outer
-///   try/catch returns anonymous [Targeting] as a last resort.
+///   try/catch returns the [userId]-only targeting as a last resort.
 ///   Platform is param-derived (not plugin-derived), so it always
 ///   survives seam failures — only the plugin-derived fields
 ///   (appVersion/locale/country) degrade to empty.
@@ -64,10 +64,10 @@ class DeviceTargetingCollector {
     bool? isWeb,
     DeviceLocaleDispatcher? dispatcher,
     AppVersionReader? packageInfo,
-  })  : _platform = platform ?? defaultTargetPlatform,
-        _isWeb = isWeb ?? kIsWeb,
-        _dispatcher = dispatcher ?? _PlatformDispatcherLocale(),
-        _packageInfo = packageInfo ?? _PackageInfoVersionReader();
+  }) : _platform = platform ?? defaultTargetPlatform,
+       _isWeb = isWeb ?? kIsWeb,
+       _dispatcher = dispatcher ?? _PlatformDispatcherLocale(),
+       _packageInfo = packageInfo ?? _PackageInfoVersionReader();
 
   final TargetPlatform _platform;
   final bool _isWeb;
@@ -76,23 +76,13 @@ class DeviceTargetingCollector {
 
   static String _normalizePlatform(TargetPlatform platform, bool isWeb) {
     if (isWeb) return 'web';
-    switch (platform) {
-      case TargetPlatform.android:
-        return 'android';
-      case TargetPlatform.iOS:
-        return 'ios';
-      case TargetPlatform.macOS:
-        return 'macos';
-      case TargetPlatform.windows:
-        return 'windows';
-      case TargetPlatform.linux:
-        return 'linux';
-      case TargetPlatform.fuchsia:
-        return '';
-    }
+    return platform.name.toLowerCase();
   }
 
-  Future<Targeting> resolveDeviceTargeting({Targeting? explicit}) async {
+  Future<Targeting> resolveDeviceTargeting(
+    String userId,
+    Map<String, Object?> customAttrs,
+  ) async {
     try {
       final autoPlatform = _normalizePlatform(_platform, _isWeb);
 
@@ -116,37 +106,21 @@ class DeviceTargetingCollector {
         autoCountry = '';
       }
 
-      final e = explicit;
-      if (e == null) {
-        return Targeting(
-          platform: autoPlatform,
-          appVersion: autoVersion,
-          locale: autoLocale,
-          country: autoCountry,
-          customAttrs: const {},
-        );
-      }
       return Targeting(
-        userId: e.userId,
-        platform: e.platform.isNotEmpty ? e.platform : autoPlatform,
-        appVersion: e.appVersion.isNotEmpty ? e.appVersion : autoVersion,
-        locale: e.locale.isNotEmpty ? e.locale : autoLocale,
-        country: e.country.isNotEmpty ? e.country : autoCountry,
-        customAttrs: Map<String, Object?>.of(e.customAttrs),
+        userId: userId,
+        platform: autoPlatform,
+        appVersion: autoVersion,
+        locale: autoLocale,
+        country: autoCountry,
+        customAttrs: Map<String, Object?>.of(customAttrs),
       );
     } catch (_) {
-      // Last resort: never throw. Preserve explicit scalars when the
-      // merge itself somehow failed; else fully anonymous.
+      // Last resort: never throw. Keep the caller-supplied identity even
+      // when device collection itself somehow failed.
       try {
-        final e = explicit;
-        if (e == null) return const Targeting();
         return Targeting(
-          userId: e.userId,
-          platform: e.platform,
-          appVersion: e.appVersion,
-          locale: e.locale,
-          country: e.country,
-          customAttrs: Map<String, Object?>.of(e.customAttrs),
+          userId: userId,
+          customAttrs: Map<String, Object?>.of(customAttrs),
         );
       } catch (_) {
         return const Targeting();

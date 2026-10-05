@@ -22,7 +22,7 @@ Or pin it in your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  configwire_flutter: ^0.0.1
+  configwire_flutter: ^0.1.0
 ```
 
 Then `flutter pub get`.
@@ -46,7 +46,6 @@ Future<void> main() async {
     env: 'dev',
     baseUrl: 'http://127.0.0.1:8090',
     defaults: {'launch_flag': false},
-    userId: 'user-7',
     customAttrs: {'plan': 'pro'},
     ensureInitialized: false,
   );
@@ -77,28 +76,63 @@ getter, variant, fetch-lifecycle, realtime, and logging reference.
 ## Targeting
 
 Targeting attributes are sent as fetch query params so the server can
-evaluate `rules` per fetch. Device collection is automatic
-(`package_info_plus`; locale needs no extra
-dependency): platform from `defaultTargetPlatform` (`kIsWeb` forces
-`web`), `appVersion` with `+build` metadata stripped for strict-semver
-compare, locale via `toLanguageTag` with country from `countryCode`.
-`customAttrs` comes from the caller's explicit input.
+evaluate `rules` per fetch. Collection is automatic
+(`package_info_plus`; locale needs no extra dependency).
 Targeting stays sticky through
 `cw.setTargeting` / `cw.updateTargeting` exactly as in `configwire`.
 
-Override precedence in `createConfigWire`:
+Default targeting (every fetch carries these unless empty, in which case
+the param is omitted):
 
-| # | Condition | Result |
-|---|-----------|--------|
-| 1 | `explicitTargeting` is given | Used as-is; device collection is skipped entirely |
-| 2 | `collectDevice: true` (default), no explicit targeting | `userId` / `customAttrs` merge over the auto-collected device targeting: explicit non-empty scalars win per field, `customAttrs` comes from the explicit input |
-| 3 | `collectDevice: false`, no explicit targeting | Anonymous except for `userId` / `customAttrs` |
+| Field         | Query param              | Default value                                                                                                                                                                                                  | Source                                     |
+| ------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `userId`      | `?uid=`                  | Stable install ID: a 15-char lowercase `[a-z0-9]` ID, generated once and persisted. Customize the first-run value only via `idGenerator` (default `defaultIdGenerator`); `''` stays anonymous and pins nothing | `SharedPreferencesAsync` (+ `idGenerator`) |
+| `platform`    | `?platform=`             | `android` \| `ios` \| `macos` \| `windows` \| `linux` \| `fuchsia` \| `web` (`kIsWeb` forces `web`)                                                                                                            | `defaultTargetPlatform`                    |
+| `appVersion`  | `?appVersion=`           | Package version with `+build` metadata stripped for strict-semver compare (e.g. `1.0.0+1` → `1.0.0`); empty (omitted) when unreadable                                                                          | `package_info_plus`                        |
+| `locale`      | `?locale=`               | `toLanguageTag` (e.g. `en-US`); empty (omitted) when unreadable                                                                                                                                                | `PlatformDispatcher.locale`                |
+| `country`     | `?country=`              | `countryCode` (e.g. `US`); empty (omitted) when absent or unreadable                                                                                                                                           | `PlatformDispatcher.locale`                |
+| `customAttrs` | `?attrs=` (compact JSON) | `{}` (omitted) unless passed via `createConfigWire(customAttrs:)`                                                                                                                                              | Caller input                               |
+
+Identity in `createConfigWire`:
+
+| #   | Layer                                              | Result                                                                                                                                                                                                 |
+| --- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | Install ID                                         | Generated once, persisted, always the `userId`. Customize the first-run value only via `idGenerator` (default `defaultIdGenerator`); later launches reuse the persisted value without calling it again |
+| 2   | Device values (`collectDevice: true`, the default) | Fill platform/appVersion/locale/country around the install ID                                                                                                                                          |
+| +   | `collectDevice: false`                             | Skips device collection entirely: install ID plus `customAttrs`                                                                                                                                        |
+| +   | `customAttrs`                                      | Sent as `?attrs=` JSON alongside the install ID; never persisted                                                                                                                                       |
+
+Prefs keys share the `<prefix>.<env>.<suffix>` scheme 
+(`prefixCache`, default `'configwire'`):
+
+| Suffix   | Key                                                                         | Holds              |
+| -------- | --------------------------------------------------------------------------- | ------------------ |
+| `cache`  | `<prefix>.<Uri.encodeComponent(env)>.cache` (e.g. `configwire.dev.cache`)   | Cached flag values |
+| `userId` | `<prefix>.<Uri.encodeComponent(env)>.userId` (e.g. `configwire.dev.userId`) | Stable install ID  |
+
+Only the install ID is persisted — never `customAttrs` or device fields.
+The install ID is fully internal: it is generated once, reused on every
+launch, and sent as `?uid=` with each fetch. An `idGenerator` returning
+`''` stays anonymous for that launch and pins nothing.
+
+```dart
+// Custom prefix example:
+final cw2 = await ConfigWireFlutter.createConfigWire(
+  apiKey: 'YOUR_SDK_KEY',
+  env: 'dev',
+  baseUrl: 'http://127.0.0.1:8090',
+  prefixCache: 'myapp', // keys: myapp.dev.cache / myapp.dev.userId
+  ensureInitialized: false,
+);
+```
 
 ## Cache
 
 Persistence is a `SharedPreferencesAsync`-backed `CacheStore`, wired
 automatically by `createConfigWire`. Prefs key:
-`cacheKey ?? 'configwire.cache.<Uri.encodeComponent(env)>'`.
+`'<prefixCache>.<Uri.encodeComponent(env)>.cache'`
+(e.g. `configwire.dev.cache`; pass `prefixCache: 'myapp'` to isolate to
+`myapp.dev.cache` / `myapp.dev.userId`).
 Blocked storage degrades to load-null/save-noop: the client keeps
 serving defaults plus server fetches and never throws. Saves swallow
 all errors by design, so callers never observe a throw.

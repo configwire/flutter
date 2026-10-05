@@ -9,7 +9,6 @@ Future<void> main() async {
     env: 'dev',
     baseUrl: 'http://127.0.0.1:8090',
     defaults: {'launch_flag': false},
-    userId: 'user-7',
     customAttrs: {'plan': 'pro'},
     ensureInitialized: false,
   );

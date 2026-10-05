@@ -1,14 +1,13 @@
-// Fail-first (TDD) suite for `SharedPreferencesCacheStore`.
-// The implementation lives in `lib/src/prefs_store.dart` and is owned by
-// plan checkbox 5 — this suite MUST FAIL to compile/run until then.
+// Suite for `SharedPreferencesCacheStore`.
 //
-// Target API under test (checkbox 5 implements exactly this):
+// Target API under test:
 //   SharedPreferencesCacheStore({
 //     required SharedPreferencesAsync prefs,
 //     required String env,
-//     String? cacheKey,
+//     String prefixCache = 'configwire',
 //   })
-// Prefs key = `cacheKey ?? 'configwire.cache.<Uri.encodeComponent(env)>'`;
+// Prefs key = `'<prefixCache>.<Uri.encodeComponent(env)>.cache'`
+// (default `configwire.dev.cache`);
 // `load()` returns `CacheData?` (null on miss/corrupt, never throws);
 // `save(CacheData)` persists and swallows ALL errors.
 //
@@ -73,8 +72,8 @@ void main() {
       final original = fixture();
       await store.save(original);
 
-      // Key asserted namespaced per env.
-      final raw = await prefs.getString('configwire.cache.dev');
+      // Key asserted namespaced per env with the default prefix.
+      final raw = await prefs.getString('configwire.dev.cache');
       expect(raw, isNotNull);
 
       final loaded = await store.load();
@@ -96,7 +95,7 @@ void main() {
     test('corrupt payload loads null without throwing', () async {
       SharedPreferencesAsyncPlatform.instance =
           InMemorySharedPreferencesAsync.withData({
-            'configwire.cache.dev': '{bad',
+            'configwire.dev.cache': '{bad',
           });
       final store = SharedPreferencesCacheStore(
         prefs: SharedPreferencesAsync(),
@@ -106,20 +105,20 @@ void main() {
       await expectLater(store.load(), completion(isNull));
     });
 
-    test('custom cacheKey overrides the default namespaced key', () async {
+    test('custom prefixCache isolates the key', () async {
       SharedPreferencesAsyncPlatform.instance =
           InMemorySharedPreferencesAsync.empty();
       final prefs = SharedPreferencesAsync();
       final store = SharedPreferencesCacheStore(
         prefs: prefs,
         env: 'dev',
-        cacheKey: 'custom.key',
+        prefixCache: 'myapp',
       );
 
       await store.save(fixture());
 
-      expect(await prefs.getString('custom.key'), isNotNull);
-      expect(await prefs.getString('configwire.cache.dev'), isNull);
+      expect(await prefs.getString('myapp.dev.cache'), isNotNull);
+      expect(await prefs.getString('configwire.dev.cache'), isNull);
       final loaded = await store.load();
       expect(loaded, isNotNull);
       expectSameCacheData(loaded!, fixture());
@@ -137,7 +136,7 @@ void main() {
       await store.save(fixture());
 
       expect(
-        await prefs.getString('configwire.cache.a%2Fb%20c'),
+        await prefs.getString('configwire.a%2Fb%20c.cache'),
         isNotNull,
       );
       final loaded = await store.load();
