@@ -6,6 +6,11 @@
   exports its `dart:io` Linux implementation and cost 10 pub.dev platform
   points). Runtime behavior is unchanged — the `package_info_plus` plugin
   still provides the platform implementations.
+* Factory hardening (`ConfigWireFlutter.createConfigWire` never throws):
+  a throwing `idGenerator` degrades to anonymous (pins nothing instead of
+  propagating); `collectDevice: false` defensive-copies `customAttrs` to
+  match the `true` path; device targeting trims `appVersion` before the
+  `+build` strip.
 
 ## 0.1.0
 
