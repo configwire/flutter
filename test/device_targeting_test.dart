@@ -20,7 +20,7 @@
 //   caller input alone.
 //
 // Fakes below are hand-written classes implementing the collector's seam
-// types. They NEVER touch real `PackageInfo.fromPlatform()` — no device
+// types. They NEVER touch the real `PackageInfoPlatform.instance` — no device
 // exists in CI.
 import 'dart:ui' show Locale;
 
@@ -41,7 +41,7 @@ class FakeDispatcher implements DeviceLocaleDispatcher {
   Locale get locale => _locale;
 }
 
-/// Fake version source standing in for `PackageInfo.fromPlatform()`.
+/// Fake version source standing in for `PackageInfoPlatform.instance.getAll()`.
 class FakePackageInfo implements AppVersionReader {
   FakePackageInfo(this._version);
   final String _version;
@@ -54,7 +54,7 @@ class FakePackageInfo implements AppVersionReader {
 class ThrowingPackageInfo implements AppVersionReader {
   @override
   Future<String> fetchVersion() async =>
-      throw StateError('PackageInfo.fromPlatform failed');
+      throw StateError('PackageInfoPlatform.instance.getAll failed');
 }
 
 /// Locale seam that always throws (dispatcher failure simulation).

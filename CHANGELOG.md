@@ -1,3 +1,12 @@
+## 0.1.1
+
+* WASM compatibility: read the app version via
+  `package_info_plus_platform_interface` instead of
+  `package:package_info_plus/package_info_plus.dart` (which unconditionally
+  exports its `dart:io` Linux implementation and cost 10 pub.dev platform
+  points). Runtime behavior is unchanged — the `package_info_plus` plugin
+  still provides the platform implementations.
+
 ## 0.1.0
 
 * `SharedPreferencesCacheStore`: `SharedPreferencesAsync`-backed `CacheStore` with per-env key; blocked storage degrades to load-null/save-noop and never throws.

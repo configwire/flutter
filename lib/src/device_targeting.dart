@@ -3,7 +3,7 @@ import 'dart:ui' show Locale, PlatformDispatcher;
 import 'package:configwire/configwire.dart';
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, kIsWeb;
-import 'package:package_info_plus/package_info_plus.dart';
+import 'package:package_info_plus_platform_interface/package_info_platform_interface.dart';
 
 /// Injectable seam for the device locale source.
 ///
@@ -15,7 +15,7 @@ abstract class DeviceLocaleDispatcher {
 
 /// Injectable seam for the app-version source.
 ///
-/// Defaults to [PackageInfo.fromPlatform] ([_PackageInfoVersionReader]).
+/// Defaults to [PackageInfoPlatform.instance] ([_PackageInfoVersionReader]).
 /// Tests inject a fake; no device exists in CI.
 abstract class AppVersionReader {
   Future<String> fetchVersion();
@@ -30,14 +30,14 @@ class _PlatformDispatcherLocale implements DeviceLocaleDispatcher {
   Locale get locale => PlatformDispatcher.instance.locale;
 }
 
-/// Real [AppVersionReader] over [PackageInfo.fromPlatform].
+/// Real [AppVersionReader] over [PackageInfoPlatform.instance.getAll].
 ///
 /// Failure degrades to `''` (omitted from the query) instead of throwing.
 class _PackageInfoVersionReader implements AppVersionReader {
   @override
   Future<String> fetchVersion() async {
     try {
-      return (await PackageInfo.fromPlatform()).version;
+      return (await PackageInfoPlatform.instance.getAll()).version;
     } catch (_) {
       return '';
     }

@@ -1,6 +1,6 @@
 name: configwire_flutter
 description: Flutter companion for the ConfigWire client with SharedPreferences cache and device targeting.
-version: 0.1.0
+version: 0.1.1
 homepage: https://github.com/configwire/flutter
 repository: https://github.com/configwire/flutter
 issue_tracker: https://github.com/configwire/flutter/issues
@@ -21,6 +21,7 @@ dependencies:
   configwire: ^0.2.0
   shared_preferences: ^2.5.5
   package_info_plus: ^10.2.2
+  package_info_plus_platform_interface: ^4.1.0
 
 dev_dependencies:
   flutter_test:
