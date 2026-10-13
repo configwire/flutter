@@ -1,3 +1,14 @@
+## 0.1.2
+
+* Example app (`example/`): flag-gated UI driving real widgets from
+  `welcome_message` (String) and `new_checkout` (Bool) flags with
+  in-app defaults, `connectRealtime` / `onUpdate` live rebuild without
+  manual fetch, `trackExposure` at the flag-driven branches, plus a
+  debug panel (fetch status, version, etag, targeting) and an
+  admin-themed shell (`config_wire_screen`, `init_gate`, `cw_theme`,
+  `widgets`). Platform shells for android, ios, linux, macos, windows,
+  and web so `flutter run` works on every target. No library changes.
+
 ## 0.1.1
 
 * WASM compatibility: read the app version via
