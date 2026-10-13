@@ -45,7 +45,10 @@ void main() {
     expect(cw.targeting.userId, matches(simpleId));
     expect(cw.targeting.customAttrs, {'plan': 'pro'});
     expect(cw.targeting.platform, isEmpty);
-    expect(cw.targeting.toQueryParameters()['uid'], cw.targeting.userId);
+    final q = cw.targeting.toQueryParameters();
+    expect(q.containsKey('uid'), isFalse);
+    expect(q['userHash'], equals(sha256Hex16(cw.targeting.userId)));
+    expect(q['userHash'], matches(RegExp(r'^[0-9a-f]{16}$')));
     await cw.dispose();
   });
 
@@ -96,7 +99,9 @@ void main() {
         ensureInitialized: false,
       );
       expect(cw.targeting.userId, matches(simpleId));
-      expect(cw.targeting.toQueryParameters()['uid'], cw.targeting.userId);
+      final q = cw.targeting.toQueryParameters();
+      expect(q.containsKey('uid'), isFalse);
+      expect(q['userHash'], equals(sha256Hex16(cw.targeting.userId)));
       final generated = cw.targeting.userId;
       // Persisted under the default key.
       expect(
@@ -213,7 +218,9 @@ void main() {
       ensureInitialized: false,
     );
     expect(cw.targeting.userId, 'user-9');
-    expect(cw.targeting.toQueryParameters()['uid'], 'user-9');
+    final trimQ = cw.targeting.toQueryParameters();
+    expect(trimQ.containsKey('uid'), isFalse);
+    expect(trimQ['userHash'], equals(sha256Hex16('user-9')));
     expect(
       await loadPersistedUserId(prefs: SharedPreferencesAsync(), env: 'dev'),
       'user-9',
@@ -250,7 +257,9 @@ void main() {
         ensureInitialized: false,
       );
       expect(cw.targeting.userId, isEmpty);
-      expect(cw.targeting.toQueryParameters(), isNot(contains('uid')));
+      final anonQ = cw.targeting.toQueryParameters();
+      expect(anonQ.containsKey('uid'), isFalse);
+      expect(anonQ, isNot(contains('userHash')));
       expect(
         await loadPersistedUserId(prefs: SharedPreferencesAsync(), env: 'dev'),
         isNull,

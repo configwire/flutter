@@ -1,0 +1,8 @@
+# Local test wiring: resolve `configwire` to the in-repo pure-Dart client so
+# flutter suites exercise the unpublished userHash contract (test-only;
+# ignored on `flutter pub publish`, never affects the released package).
+# Committed deliberately: CI and fresh clones need it until configwire 0.3.0
+# is published; remove the override only after the floor version is live.
+dependency_overrides:
+  configwire:
+    path: ../dart

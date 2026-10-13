@@ -24,7 +24,7 @@
 // exists in CI.
 import 'dart:ui' show Locale;
 
-import 'package:configwire_flutter/src/device_targeting.dart';
+import 'package:configwire_flutter/configwire_flutter.dart';
 import 'package:flutter/foundation.dart' show TargetPlatform;
 import 'package:flutter_test/flutter_test.dart';
 
@@ -194,14 +194,18 @@ void main() {
       expect(targeting.customAttrs, isEmpty);
       expect(
         targeting.toQueryParameters(),
-        isNot(anyOf([contains('uid'), contains('attrs')])),
+        isNot(anyOf([contains('userHash'), contains('attrs')])),
       );
     });
 
     test('userId passes through untouched', () async {
       final targeting = await collector().resolveDeviceTargeting('user-7', {});
       expect(targeting.userId, 'user-7');
-      expect(targeting.toQueryParameters()['uid'], 'user-7');
+      final q = targeting.toQueryParameters();
+      expect(q.containsKey('uid'), isFalse);
+      expect(q['userHash'], equals(sha256Hex16('user-7')));
+      expect(q['userHash'], hasLength(16));
+      expect(q['userHash'], matches(RegExp(r'^[0-9a-f]{16}$')));
     });
 
     test('customAttrs survive untouched', () async {
@@ -230,6 +234,18 @@ void main() {
       expect(targeting.appVersion, '1.0.0');
       expect(targeting.locale, 'en-US');
       expect(targeting.country, 'US');
+      // Hashed identity: raw id never enters the URL, stickiness comes
+      // from the stable hash of the same id.
+      final q = targeting.toQueryParameters();
+      expect(q.containsKey('uid'), isFalse);
+      expect(q['userHash'], equals(sha256Hex16('user-7')));
+      final again = await collector().resolveDeviceTargeting('user-7', {
+        'plan': 'pro',
+      });
+      expect(
+        again.toQueryParameters()['userHash'],
+        equals(q['userHash']),
+      );
     });
   });
 

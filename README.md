@@ -19,7 +19,7 @@ Or pin it in your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  configwire_flutter: ^0.1.0
+  configwire_flutter: ^0.2.0
 ```
 
 Then `flutter pub get`.
@@ -75,7 +75,7 @@ the param is omitted):
 
 | Field         | Query param              | Default value                                                                                                                                                                                                  | Source                                     |
 | ------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| `userId`      | `?uid=`                  | Stable install ID: a 15-char lowercase `[a-z0-9]` ID, generated once and persisted. Customize the first-run value only via `idGenerator` (default `defaultIdGenerator`); `''` stays anonymous and pins nothing | `SharedPreferencesAsync` (+ `idGenerator`) |
+| `userId`      | `?userHash=`             | Stable install ID: a 15-char lowercase `[a-z0-9]` ID, generated once and persisted, emitted as `?userHash=<sha256hex16>` at fetch time. Customize the first-run value only via `idGenerator` (default `defaultIdGenerator`); `''` stays anonymous and pins nothing | `SharedPreferencesAsync` (+ `idGenerator`) |
 | `platform`    | `?platform=`             | `android` \| `ios` \| `macos` \| `windows` \| `linux` \| `fuchsia` \| `web` (`kIsWeb` forces `web`)                                                                                                            | `defaultTargetPlatform`                    |
 | `appVersion`  | `?appVersion=`           | Package version with `+build` metadata stripped for strict-semver compare (e.g. `1.0.0+1` → `1.0.0`); empty (omitted) when unreadable                                                                          | `package_info_plus`                        |
 | `locale`      | `?locale=`               | `toLanguageTag` (e.g. `en-US`); empty (omitted) when unreadable                                                                                                                                                | `PlatformDispatcher.locale`                |

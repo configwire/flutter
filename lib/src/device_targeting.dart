@@ -53,6 +53,8 @@ class _PackageInfoVersionReader implements AppVersionReader {
 /// * Locale via [Locale.toLanguageTag]; country from `countryCode`.
 /// * [userId] and [customAttrs] pass through untouched (a defensive copy
 ///   for the map); no device keys are ever added to `customAttrs`.
+///   `[userId]` emits as `?userHash=<sha256hex16>` at fetch time
+///   (`Targeting.toQueryParameters`); raw identity never enters the URL.
 /// * Never throws: each seam failure degrades its field; the outer
 ///   try/catch returns the [userId]-only targeting as a last resort.
 ///   Platform is param-derived (not plugin-derived), so it always
