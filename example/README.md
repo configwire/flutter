@@ -1,17 +1,14 @@
-# example
+# ConfigWire Flutter example
 
-A new Flutter project.
+Demo app for `configwire_flutter`: flag-gated UI over the pure-Dart `configwire` client.
 
-## Getting Started
+Start at `lib/main.dart` (`ConfigWireExampleApp`) with defaults in
+`lib/app_config.dart`. `lib/init_gate.dart` (`ConfigWireInitGate`) loads the
+cache plus force-fetch on startup; `lib/config_wire_screen.dart` renders
+`welcome_message` / `new_checkout` with `connectRealtime` + `onUpdate`;
+`lib/widgets.dart` holds `SectionCard` / `DebugPanel` / `AllValuesView` /
+`TargetingView`. `trackExposure` fires on flag views.
 
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```bash
+flutter run
+```
