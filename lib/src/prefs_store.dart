@@ -16,10 +16,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// backend) and completes normally, so callers never observe a throw.
 class SharedPreferencesCacheStore implements CacheStore {
   SharedPreferencesCacheStore({
-    required SharedPreferencesAsync prefs,
+    SharedPreferencesAsync? prefs,
     required String env,
     String prefixCache = 'configwire',
-  }) : _prefs = prefs,
+  }) : _prefs = prefs ?? SharedPreferencesAsync(),
        _key = '$prefixCache.${Uri.encodeComponent(env)}.cache';
 
   final SharedPreferencesAsync _prefs;
