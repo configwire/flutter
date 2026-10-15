@@ -195,9 +195,7 @@ abstract final class ConfigWireFlutter {
   /// await cw.configureFlutter(customAttrs: customAttrs);
   /// await cw.ensureInitialized();
   /// ```
-  @Deprecated(
-    'Use your own ConfigWire + cw.configureFlutter() instead',
-  )
+  @Deprecated('Use your own ConfigWire + cw.configureFlutter() instead')
   static Future<ConfigWire> createConfigWire({
     required String apiKey,
     required String env,
