@@ -1,3 +1,30 @@
+## 0.2.1
+
+* Bring-your-own `ConfigWire.configureFlutter(...)` extension
+  (`lib/src/configwire_flutter.dart`): construct your own `ConfigWire`
+  with a `SharedPreferencesCacheStore`, then
+  `await cw.configureFlutter(...)` resolves the install ID + device
+  targeting, calls `cw.setTargeting`, and optionally runs
+  `cw.ensureInitialized()`. Targeting resolves once per instance
+  (first-call-wins; concurrent callers join the in-flight future and
+  later callers no-op) and never throws (persisted-ID I/O swallowed,
+  throwing custom collectors degrade to identity-only). Like the core
+  constructor, configuring never fetches by default
+  (`ensureInitialized: false` — targeting only, hermetic); pass `true`
+  or call `cw.ensureInitialized()` afterwards for the cache load plus
+  forced fetch. `ConfigWireFlutter.createConfigWire` is deprecated —
+  construct `ConfigWire` directly instead (note the default flip: it
+  fetches unless `ensureInitialized: false`, while `configureFlutter`
+  only targets unless `ensureInitialized: true`).
+* `SharedPreferencesCacheStore` prefs now optional
+  (`lib/src/prefs_store.dart`): defaults to `SharedPreferencesAsync()`.
+  When callers supply their own `ConfigWire` with a cache store, the
+  `prefixCache`/`prefs` passed to `configureFlutter` must match the
+  store's so the userId key lines up with `cw.env`.
+* Example + docs migrated to the new flow (`example/lib/init_gate.dart`,
+  `example/main.dart`, `README.md`); new hermetic suite for the
+  bring-your-own flow (`test/flutter_init_test.dart`).
+
 ## 0.2.0
 
 * **Breaking:** fetch identity is now userHash-only (via `configwire ^0.3.0`:
