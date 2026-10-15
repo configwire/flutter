@@ -45,17 +45,17 @@ packages:
     dependency: transitive
     description:
       name: configwire
-      sha256: "76251ce3227f224d06fe74e18e5c64e558aa0234a1760a72ae2ae8d5115652f4"
+      sha256: b3d0b6f5743a6abd96325b9724301b9ed0ccddf7f425414452b493cacd48f3de
       url: "https://pub.dev"
     source: hosted
-    version: "0.2.1"
+    version: "0.3.0"
   configwire_flutter:
     dependency: "direct main"
     description:
       path: ".."
       relative: true
     source: path
-    version: "0.1.2"
+    version: "0.2.0"
   crypto:
     dependency: transitive
     description:
@@ -272,7 +272,7 @@ packages:
     source: hosted
     version: "2.1.8"
   shared_preferences:
-    dependency: "direct dev"
+    dependency: transitive
     description:
       name: shared_preferences
       sha256: "1e85e0dccf5b4a016077fea7dfbb4a7cb39c759ac1596fcf60c06deadb7da91f"

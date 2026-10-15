@@ -1,10 +1,9 @@
 import 'package:configwire_flutter/configwire_flutter.dart';
+import 'package:example/config_wire_screen.dart';
+import 'package:example/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-import 'package:example/main.dart';
-import 'package:example/config_wire_screen.dart';
 
 void main() {
   // SharedPreferences needs a mock backing store in tests.
