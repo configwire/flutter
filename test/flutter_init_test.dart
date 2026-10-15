@@ -38,8 +38,7 @@ class ThrowingCollector extends DeviceTargetingCollector {
   Future<Targeting> resolveDeviceTargeting(
     String userId,
     Map<String, Object?> customAttrs,
-  ) async =>
-      throw StateError('collector exploded');
+  ) async => throw StateError('collector exploded');
 }
 
 ConfigWire _testClient({Map<String, Object?> defaults = const {}}) {
@@ -114,9 +113,7 @@ void main() {
     await cw.dispose();
 
     cw = _testClient();
-    await cw.configureFlutter(
-      collectDevice: false,
-    );
+    await cw.configureFlutter(collectDevice: false);
     expect(cw.targeting.userId, 'my-device-42');
     await cw.dispose();
   });

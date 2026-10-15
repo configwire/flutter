@@ -242,10 +242,7 @@ void main() {
       final again = await collector().resolveDeviceTargeting('user-7', {
         'plan': 'pro',
       });
-      expect(
-        again.toQueryParameters()['userHash'],
-        equals(q['userHash']),
-      );
+      expect(again.toQueryParameters()['userHash'], equals(q['userHash']));
     });
   });
 
