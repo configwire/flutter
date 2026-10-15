@@ -146,97 +146,97 @@ class _ConfigWireScreenState extends State<ConfigWireScreen> {
         decoration: const BoxDecoration(gradient: CwTheme.pageWash),
         child: ListView(
           padding: const EdgeInsets.all(16),
-        children: [
-          // ── Welcome banner (String flag) ──────────────────────────────────
-          SectionCard(
-            title: 'String flag: ${AppConfig.welcomeFlag}',
-            child: Text(
-              welcomeMsg,
-              style: Theme.of(context).textTheme.titleMedium,
+          children: [
+            // ── Welcome banner (String flag) ──────────────────────────────────
+            SectionCard(
+              title: 'String flag: ${AppConfig.welcomeFlag}',
+              child: Text(
+                welcomeMsg,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
             ),
-          ),
 
-          const SizedBox(height: 12),
+            const SizedBox(height: 12),
 
-          // ── Bool flag: new_checkout ───────────────────────────────────────
-          SectionCard(
-            title: 'Bool flag: ${AppConfig.newCheckoutFlag}',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      newCheckout ? Icons.check_circle : Icons.cancel,
-                      color: newCheckout ? CwTheme.mint : CwTheme.mutedDim,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      newCheckout ? 'Enabled' : 'Disabled',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.shopping_cart),
-                  label: Text(
-                    newCheckout
-                        ? 'New Checkout (taps: $_checkoutTaps)'
-                        : 'Legacy Checkout (taps: $_checkoutTaps)',
+            // ── Bool flag: new_checkout ───────────────────────────────────────
+            SectionCard(
+              title: 'Bool flag: ${AppConfig.newCheckoutFlag}',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        newCheckout ? Icons.check_circle : Icons.cancel,
+                        color: newCheckout ? CwTheme.mint : CwTheme.mutedDim,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        newCheckout ? 'Enabled' : 'Disabled',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ],
                   ),
-                  onPressed: _onCheckoutTap,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Each tap calls trackExposure("${AppConfig.newCheckoutFlag}").',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
+                  const SizedBox(height: 8),
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.shopping_cart),
+                    label: Text(
+                      newCheckout
+                          ? 'New Checkout (taps: $_checkoutTaps)'
+                          : 'Legacy Checkout (taps: $_checkoutTaps)',
+                    ),
+                    onPressed: _onCheckoutTap,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Each tap calls trackExposure("${AppConfig.newCheckoutFlag}").',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
             ),
-          ),
 
-          const SizedBox(height: 12),
+            const SizedBox(height: 12),
 
-          // ── Debug panel ───────────────────────────────────────────────────
-          SectionCard(
-            title: 'Debug info',
-            child: DebugPanel(cw: cw),
-          ),
-
-          const SizedBox(height: 12),
-
-          // ── All values ────────────────────────────────────────────────────
-          SectionCard(
-            title: 'All config values',
-            child: AllValuesView(cw: cw),
-          ),
-
-          const SizedBox(height: 12),
-
-          // ── Targeting info ────────────────────────────────────────────────
-          SectionCard(
-            title: 'Active targeting',
-            child: TargetingView(targeting: targeting),
-          ),
-
-          const SizedBox(height: 24),
-
-          // ── Actions ───────────────────────────────────────────────────────
-          FilledButton.icon(
-            icon: const Icon(Icons.refresh),
-            label: const Text('fetchAndActivate'),
-            onPressed: _fetchAndActivate,
-          ),
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
-            icon: Icon(realtimeConnected ? Icons.wifi_off : Icons.wifi),
-            label: Text(
-              realtimeConnected ? 'Disconnect realtime' : 'Connect realtime',
+            // ── Debug panel ───────────────────────────────────────────────────
+            SectionCard(
+              title: 'Debug info',
+              child: DebugPanel(cw: cw),
             ),
-            onPressed: _toggleRealtime,
-          ),
-        ],
+
+            const SizedBox(height: 12),
+
+            // ── All values ────────────────────────────────────────────────────
+            SectionCard(
+              title: 'All config values',
+              child: AllValuesView(cw: cw),
+            ),
+
+            const SizedBox(height: 12),
+
+            // ── Targeting info ────────────────────────────────────────────────
+            SectionCard(
+              title: 'Active targeting',
+              child: TargetingView(targeting: targeting),
+            ),
+
+            const SizedBox(height: 24),
+
+            // ── Actions ───────────────────────────────────────────────────────
+            FilledButton.icon(
+              icon: const Icon(Icons.refresh),
+              label: const Text('fetchAndActivate'),
+              onPressed: _fetchAndActivate,
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              icon: Icon(realtimeConnected ? Icons.wifi_off : Icons.wifi),
+              label: Text(
+                realtimeConnected ? 'Disconnect realtime' : 'Connect realtime',
+              ),
+              onPressed: _toggleRealtime,
+            ),
+          ],
         ),
       ),
     );

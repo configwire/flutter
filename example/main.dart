@@ -11,9 +11,7 @@ Future<void> main() async {
     defaults: {'launch_flag': false},
     store: SharedPreferencesCacheStore(env: 'dev'),
   );
-  await cw.configureFlutter(
-    customAttrs: {'plan': 'pro'},
-  );
+  await cw.configureFlutter(customAttrs: {'plan': 'pro'});
   await cw.ensureInitialized();
 
   assert(cw.getBool('launch_flag') == false);

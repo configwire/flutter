@@ -38,11 +38,7 @@ abstract final class CwTheme {
     borderRadius: BorderRadius.circular(12),
     border: Border.all(color: border),
     boxShadow: const <BoxShadow>[
-      BoxShadow(
-        color: Color(0x59000000),
-        blurRadius: 12,
-        offset: Offset(0, 2),
-      ),
+      BoxShadow(color: Color(0x59000000), blurRadius: 12, offset: Offset(0, 2)),
     ],
   );
 }

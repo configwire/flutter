@@ -80,8 +80,7 @@ class DebugPanel extends StatelessWidget {
             rt == null ? 'disconnected' : rt.status.name,
             color: rtColor,
           ),
-          if (rt != null)
-            _row('realtime.isConnected', '${rt.isConnected}'),
+          if (rt != null) _row('realtime.isConnected', '${rt.isConnected}'),
           if (rt?.lastError != null)
             _row(
               'realtime.lastError',
