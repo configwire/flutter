@@ -27,25 +27,28 @@ Then `flutter pub get`.
 ## Usage
 
 The snippet below matches `example/main.dart`. Copy, paste, run.
-It stays offline (`ensureInitialized: false`), so it needs no server.
-On a real device drop that line (default `true`) to load the cache
+With no server running, the startup fetch fails gracefully and the demo
+serves defaults. Point `baseUrl` at a real server to load the cache
 plus force-fetch on startup.
 
 ```dart
 import 'package:configwire_flutter/configwire_flutter.dart';
 
-/// Offline-first demo: `ensureInitialized: false` means no network, so this
-/// runs in CI with no server. On a real device drop that line (default true)
-/// to load the cache plus force-fetch on startup.
+/// Offline-first demo: with no server running, the startup fetch fails
+/// gracefully and the demo serves defaults. Point `baseUrl` at a real
+/// server to load the cache plus force-fetch on startup.
 Future<void> main() async {
-  final cw = await ConfigWireFlutter.createConfigWire(
+  final cw = ConfigWire(
     apiKey: 'YOUR_SDK_KEY', // sent as X-ConfigWire-Key, never printed
     env: 'dev',
     baseUrl: 'http://127.0.0.1:8090',
     defaults: {'launch_flag': false},
-    customAttrs: {'plan': 'pro'},
-    ensureInitialized: false,
+    store: SharedPreferencesCacheStore(env: 'dev'),
   );
+  await cw.configureFlutter(
+    customAttrs: {'plan': 'pro'},
+  );
+  await cw.ensureInitialized();
 
   assert(cw.getBool('launch_flag') == false);
   // NOTE: values printed, apiKey never printed.
@@ -57,7 +60,11 @@ Future<void> main() async {
 }
 ```
 
-> `createConfigWire` returns a plain `configwire` `ConfigWire`. Read more
+> `cw.configureFlutter` wires Flutter-side targeting onto your own
+> `configwire` `ConfigWire`.
+> (`ConfigWireFlutter.createConfigWire` is
+> deprecated — construct `ConfigWire` directly and call
+> `cw.configureFlutter` instead.) Read more
 > in the [`configwire`](https://pub.dev/packages/configwire) package:
 > reading values, variants, fetch lifecycle, realtime, analytics,
 > logging, and cache.
@@ -80,7 +87,7 @@ the param is omitted):
 | `appVersion`  | `?appVersion=`           | Package version with `+build` metadata stripped for strict-semver compare (e.g. `1.0.0+1` → `1.0.0`); empty (omitted) when unreadable                                                                          | `package_info_plus`                        |
 | `locale`      | `?locale=`               | `toLanguageTag` (e.g. `en-US`); empty (omitted) when unreadable                                                                                                                                                | `PlatformDispatcher.locale`                |
 | `country`     | `?country=`              | `countryCode` (e.g. `US`); empty (omitted) when absent or unreadable                                                                                                                                           | `PlatformDispatcher.locale`                |
-| `customAttrs` | `?attrs=` (compact JSON) | `{}` (omitted) unless passed via `createConfigWire(customAttrs:)`                                                                                                                                              | Caller input                               |
+| `customAttrs` | `?attrs=` (compact JSON) | `{}` (omitted) unless passed via `cw.configureFlutter(customAttrs:)`                                                                                                                                                  | Caller input                               |
 
 ## License
 
