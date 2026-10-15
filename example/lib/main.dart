@@ -1,8 +1,8 @@
 /// ConfigWire Flutter Example
 ///
 /// Demonstrates:
-///   • ConfigWireFlutter.createConfigWire — one-call setup with
-///     SharedPreferences cache and automatic device targeting.
+///   • cw.configureFlutter — Flutter-side targeting on your own ConfigWire
+///     with a SharedPreferences cache and automatic device targeting.
 ///   • Feature flags gating real UI: [AppConfig.welcomeFlag] and
 ///     [AppConfig.newCheckoutFlag].
 ///   • connectRealtime / disconnectRealtime for live config pushes.

@@ -17,12 +17,11 @@ class _ConfigWireInitGateState extends State<ConfigWireInitGate> {
   // Runtime-editable server config. Prefilled from [AppConfig] defaults so
   // the hardcoded constants remain as fallbacks; in-memory only, never
   // persisted (apiKey is never printed/logged).
-  late final TextEditingController _baseUrlController =
-      TextEditingController(text: AppConfig.baseUrl);
-  late final TextEditingController _apiKeyController =
-      TextEditingController(text: AppConfig.apiKey);
-  late final TextEditingController _envController =
-      TextEditingController(text: AppConfig.env);
+  late final _baseUrlController = TextEditingController(
+    text: AppConfig.baseUrl,
+  );
+  late final _apiKeyController = TextEditingController(text: AppConfig.apiKey);
+  late final _envController = TextEditingController(text: AppConfig.env);
 
   ConfigWire? _cw;
   String? _error;
@@ -33,9 +32,7 @@ class _ConfigWireInitGateState extends State<ConfigWireInitGate> {
     final apiKey = _apiKeyController.text.trim();
     final env = _envController.text.trim();
     if (baseUrl.isEmpty || apiKey.isEmpty || env.isEmpty) {
-      setState(
-        () => _error = 'baseUrl, apiKey, and env must not be empty.',
-      );
+      setState(() => _error = 'baseUrl, apiKey, and env must not be empty.');
       return;
     }
     setState(() {
@@ -53,15 +50,20 @@ class _ConfigWireInitGateState extends State<ConfigWireInitGate> {
       if (mounted) setState(() => _cw = null);
     }
     try {
-      final cw = await ConfigWireFlutter.createConfigWire(
+      final cw = ConfigWire(
         apiKey: apiKey,
         env: env,
         baseUrl: baseUrl,
         defaults: AppConfig.defaults,
-        // collectDevice: true  — auto-fills platform, appVersion, locale, country.
-        // idGenerator: defaultIdGenerator  — random 15-char install ID, persisted.
+        store: SharedPreferencesCacheStore(env: env),
         verbose: true, // prints debug lines to the console
       );
+      await cw.configureFlutter(
+        // collectDevice: true  — auto-fills platform, appVersion, locale, country.
+        // idGenerator: defaultIdGenerator  — random 15-char install ID, persisted.
+      );
+      // Cache load + force-fetch; never throws (falls back to cache/defaults).
+      await cw.ensureInitialized();
       if (mounted) {
         setState(() {
           _cw = cw;
@@ -206,13 +208,10 @@ class _ConfigWireInitGateState extends State<ConfigWireInitGate> {
                           ? const SizedBox(
                               width: 16,
                               height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                              ),
+                              child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.link),
-                      label:
-                          Text(_connecting ? 'Connecting…' : 'Connect'),
+                      label: Text(_connecting ? 'Connecting…' : 'Connect'),
                       onPressed: _connecting ? null : _connect,
                     ),
                   ],
