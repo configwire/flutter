@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+// Displays the deprecated compat Targeting.country field for debugging.
 import 'package:configwire_flutter/configwire_flutter.dart';
 import 'package:flutter/material.dart';
 

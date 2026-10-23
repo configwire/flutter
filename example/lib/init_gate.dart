@@ -52,15 +52,18 @@ class _ConfigWireInitGateState extends State<ConfigWireInitGate> {
     try {
       final cw = ConfigWire(
         apiKey: apiKey,
+        // env written once here; configureFlutter attaches the default
+        // prefs store namespaced by this env.
         env: env,
         baseUrl: baseUrl,
         defaults: AppConfig.defaults,
-        store: SharedPreferencesCacheStore(env: env),
         verbose: true, // prints debug lines to the console
       );
       await cw.configureFlutter(
         // collectDevice: true  — auto-fills platform, appVersion, locale, country.
-        // idGenerator: defaultIdGenerator  — random 15-char install ID, persisted.
+        // Default prefs store attached here; stable install ID
+        // auto-generated + persisted by it; override the first-run value
+        // with idGenerator if needed.
       );
       // Cache load + force-fetch; never throws (falls back to cache/defaults).
       await cw.ensureInitialized();
