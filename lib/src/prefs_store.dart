@@ -31,9 +31,9 @@ class SharedPreferencesCacheStore implements CacheStore {
     required String env,
     String prefixCache = 'configwire',
   }) : _prefs = prefs ?? SharedPreferencesAsync(),
-        env = env,
-        prefixCache = prefixCache,
-        _key = '$prefixCache.${Uri.encodeComponent(env)}.cache';
+       env = env,
+       prefixCache = prefixCache,
+       _key = '$prefixCache.${Uri.encodeComponent(env)}.cache';
 
   final SharedPreferencesAsync _prefs;
   final String _key;

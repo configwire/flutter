@@ -214,7 +214,8 @@ abstract final class ConfigWireFlutter {
         }
       }
     } else {
-      final resolvedPrefs = prefs ??
+      final resolvedPrefs =
+          prefs ??
           (backing is SharedPreferencesCacheStore
               ? backing.prefs
               : SharedPreferencesAsync());
@@ -358,7 +359,8 @@ abstract final class ConfigWireFlutter {
         prefixCache: attached.prefixCache,
       );
     }
-    final fallbackPrefs = prefs ??
+    final fallbackPrefs =
+        prefs ??
         (attached is SharedPreferencesCacheStore
             ? attached.prefs
             : SharedPreferencesAsync());
@@ -412,17 +414,17 @@ extension ConfigWireFlutterExtension on ConfigWire {
     SharedPreferencesAsync? prefs,
     DeviceTargetingCollector? collector,
     CacheStore? store,
-    }) => ConfigWireFlutter._configureFlutter(
-      this,
-      idGenerator: idGenerator,
-      customAttrs: customAttrs,
-      collectDevice: collectDevice,
-      prefixCache: prefixCache,
-      ensureInitialized: ensureInitialized,
-      prefs: prefs,
-      collector: collector,
-      store: store,
-    );
+  }) => ConfigWireFlutter._configureFlutter(
+    this,
+    idGenerator: idGenerator,
+    customAttrs: customAttrs,
+    collectDevice: collectDevice,
+    prefixCache: prefixCache,
+    ensureInitialized: ensureInitialized,
+    prefs: prefs,
+    collector: collector,
+    store: store,
+  );
 }
 
 /// Prefs key for the stable-bucket fallback:
@@ -434,14 +436,15 @@ extension ConfigWireFlutterExtension on ConfigWire {
 /// non-prefs backing stores, whose cache rows are session-only — prefs
 /// backed stores carry the bucket in the row itself and never touch this
 /// key, so the two sources can never fork.
-String _bucketKeyFor({required String env, String prefixCache = 'configwire'}) =>
-    '$prefixCache.${Uri.encodeComponent(env)}.bucket';
+String _bucketKeyFor({
+  required String env,
+  String prefixCache = 'configwire',
+}) => '$prefixCache.${Uri.encodeComponent(env)}.bucket';
 
 /// Canonical bucket validation: plain `0`-`9999` ints only.
 /// Wrong shapes and out-of-range values parse as absent (null), mirroring
 /// the tolerant `CacheData.bucket` rule (never coerced, never throws).
-bool _isCanonicalBucket(Object? raw) =>
-    raw is int && raw >= 0 && raw <= 9999;
+bool _isCanonicalBucket(Object? raw) => raw is int && raw >= 0 && raw <= 9999;
 
 /// Loads the fallback bucket, or null on miss/invalid/error.
 ///
@@ -531,10 +534,10 @@ class _BucketFallbackCacheStore implements CacheStore {
     required SharedPreferencesAsync prefs,
     required String env,
     String prefixCache = 'configwire',
-  })  : _inner = inner,
-        _prefs = prefs,
-        _env = env,
-        _prefixCache = prefixCache;
+  }) : _inner = inner,
+       _prefs = prefs,
+       _env = env,
+       _prefixCache = prefixCache;
 
   final CacheStore _inner;
   final SharedPreferencesAsync _prefs;
