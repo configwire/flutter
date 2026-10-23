@@ -42,20 +42,19 @@ packages:
     source: hosted
     version: "1.19.1"
   configwire:
-    dependency: transitive
+    dependency: "direct overridden"
     description:
-      name: configwire
-      sha256: b3d0b6f5743a6abd96325b9724301b9ed0ccddf7f425414452b493cacd48f3de
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.3.0"
+      path: "../../dart"
+      relative: true
+    source: path
+    version: "0.3.2"
   configwire_flutter:
     dependency: "direct main"
     description:
       path: ".."
       relative: true
     source: path
-    version: "0.2.1"
+    version: "0.2.2"
   crypto:
     dependency: transitive
     description:
