@@ -37,20 +37,20 @@ import 'package:shared_preferences_platform_interface/shared_preferences_async_p
 
 /// Full `CacheData` fixture carrying a stable bucket beside the etag.
 CacheData bucketFixture({int? bucket = 42}) => CacheData(
-      etag: 'e1',
-      version: 3,
-      fetchedAt: DateTime.utc(2026, 9, 22),
-      values: const {'launch_flag': true},
-      variants: const {'checkout': 'control'},
-      bucket: bucket,
-    );
+  etag: 'e1',
+  version: 3,
+  fetchedAt: DateTime.utc(2026, 9, 22),
+  values: const {'launch_flag': true},
+  variants: const {'checkout': 'control'},
+  bucket: bucket,
+);
 
 ConfigWire memoryClient() => ConfigWire(
-      apiKey: 'sk-test',
-      env: 'dev',
-      baseUrl: 'http://127.0.0.1:8090',
-      store: MemoryCacheStore(),
-    );
+  apiKey: 'sk-test',
+  env: 'dev',
+  baseUrl: 'http://127.0.0.1:8090',
+  store: MemoryCacheStore(),
+);
 
 void main() {
   setUp(() {
@@ -78,19 +78,26 @@ void main() {
 
     test('dev and prod rows keep independent buckets', () async {
       final prefs = SharedPreferencesAsync();
-      await SharedPreferencesCacheStore(prefs: prefs, env: 'dev')
-          .save(bucketFixture(bucket: 42));
-      await SharedPreferencesCacheStore(prefs: prefs, env: 'prod')
-          .save(bucketFixture(bucket: 7));
+      await SharedPreferencesCacheStore(
+        prefs: prefs,
+        env: 'dev',
+      ).save(bucketFixture(bucket: 42));
+      await SharedPreferencesCacheStore(
+        prefs: prefs,
+        env: 'prod',
+      ).save(bucketFixture(bucket: 7));
       expect(
-        (await SharedPreferencesCacheStore(prefs: prefs, env: 'dev').load())!
-            .bucket,
+        (await SharedPreferencesCacheStore(
+          prefs: prefs,
+          env: 'dev',
+        ).load())!.bucket,
         equals(42),
       );
       expect(
-        (await SharedPreferencesCacheStore(prefs: prefs, env: 'prod')
-                .load())!
-            .bucket,
+        (await SharedPreferencesCacheStore(
+          prefs: prefs,
+          env: 'prod',
+        ).load())!.bucket,
         equals(7),
       );
     });
@@ -109,8 +116,7 @@ void main() {
           prefs: prefs,
           env: 'dev',
           prefixCache: 'myapp',
-        ).load())!
-            .bucket,
+        ).load())!.bucket,
         equals(42),
       );
     });
@@ -151,61 +157,74 @@ void main() {
             'bucket': bad,
           }),
         );
-        await expectLater(store.load().then((c) => c?.bucket), completion(isNull));
+        await expectLater(
+          store.load().then((c) => c?.bucket),
+          completion(isNull),
+        );
       }
     });
 
-    test('blocked storage: bucket save-noop / load-absent, never throws',
-        () async {
-      SharedPreferencesAsyncPlatform.instance =
-          InMemorySharedPreferencesAsync.empty();
-      final store = SharedPreferencesCacheStore(
-        prefs: _ThrowingPrefs(),
-        env: 'dev',
-      );
-      await expectLater(store.save(bucketFixture(bucket: 42)), completes);
-      await expectLater(store.load(), completion(isNull));
-    });
+    test(
+      'blocked storage: bucket save-noop / load-absent, never throws',
+      () async {
+        SharedPreferencesAsyncPlatform.instance =
+            InMemorySharedPreferencesAsync.empty();
+        final store = SharedPreferencesCacheStore(
+          prefs: _ThrowingPrefs(),
+          env: 'dev',
+        );
+        await expectLater(store.save(bucketFixture(bucket: 42)), completes);
+        await expectLater(store.load(), completion(isNull));
+      },
+    );
 
-    test('reinstall (fresh prefs) loads bucket-absent: next cold 200 re-mints',
-        () async {
-      // First install mints and persists bucket 42 in the cache row.
-      final prefs = SharedPreferencesAsync();
-      await SharedPreferencesCacheStore(prefs: prefs, env: 'dev')
-          .save(bucketFixture(bucket: 42));
-      expect(
-        (await SharedPreferencesCacheStore(prefs: prefs, env: 'dev').load())!
-            .bucket,
-        equals(42),
-      );
-      // Reinstall wipes app storage (prefs + cache row alike): the bucket
-      // is gone and the next cold 200 mints a NEW bucket. Clearing the
-      // row must never throw and must read back as absent (not stale).
-      await prefs.remove('configwire.dev.cache');
-      await expectLater(
-        SharedPreferencesCacheStore(prefs: prefs, env: 'dev').load(),
-        completion(isNull),
-      );
-    });
+    test(
+      'reinstall (fresh prefs) loads bucket-absent: next cold 200 re-mints',
+      () async {
+        // First install mints and persists bucket 42 in the cache row.
+        final prefs = SharedPreferencesAsync();
+        await SharedPreferencesCacheStore(
+          prefs: prefs,
+          env: 'dev',
+        ).save(bucketFixture(bucket: 42));
+        expect(
+          (await SharedPreferencesCacheStore(
+            prefs: prefs,
+            env: 'dev',
+          ).load())!.bucket,
+          equals(42),
+        );
+        // Reinstall wipes app storage (prefs + cache row alike): the bucket
+        // is gone and the next cold 200 mints a NEW bucket. Clearing the
+        // row must never throw and must read back as absent (not stale).
+        await prefs.remove('configwire.dev.cache');
+        await expectLater(
+          SharedPreferencesCacheStore(prefs: prefs, env: 'dev').load(),
+          completion(isNull),
+        );
+      },
+    );
   });
 
   group('non-prefs stores mirror the bucket via the prefs fallback', () {
-    test('seeded fallback bucket reaches the memory row at configure',
-        () async {
-      final prefs = SharedPreferencesAsync();
-      await prefs.setString('configwire.dev.bucket', '42');
-      final cw = memoryClient();
-      await cw.configureFlutter(
-        collectDevice: false,
-        idGenerator: () => 'abc123def456ghi',
-      );
-      final row = await cw.store.load();
-      expect(row, isNotNull);
-      expect(row!.bucket, equals(42));
-      // The fallback key follows the userIdKeyFor namespacing scheme.
-      expect(await prefs.getString('configwire.dev.bucket'), equals('42'));
-      await cw.dispose();
-    });
+    test(
+      'seeded fallback bucket reaches the memory row at configure',
+      () async {
+        final prefs = SharedPreferencesAsync();
+        await prefs.setString('configwire.dev.bucket', '42');
+        final cw = memoryClient();
+        await cw.configureFlutter(
+          collectDevice: false,
+          idGenerator: () => 'abc123def456ghi',
+        );
+        final row = await cw.store.load();
+        expect(row, isNotNull);
+        expect(row!.bucket, equals(42));
+        // The fallback key follows the userIdKeyFor namespacing scheme.
+        expect(await prefs.getString('configwire.dev.bucket'), equals('42'));
+        await cw.dispose();
+      },
+    );
 
     test('row bucket wins over a stale fallback bucket', () async {
       final prefs = SharedPreferencesAsync();
@@ -239,53 +258,59 @@ void main() {
       await cw.dispose();
     });
 
-    test('blocked prefs: memory store stays session-only, never throws',
-        () async {
-      SharedPreferencesAsyncPlatform.instance =
-          InMemorySharedPreferencesAsync.empty();
-      final cw = ConfigWire(
-        apiKey: 'sk-test',
-        env: 'dev',
-        baseUrl: 'http://127.0.0.1:8090',
-        store: MemoryCacheStore(),
-      );
-      // Blocked storage must not break configure even though the bucket
-      // fallback backend throws on every call: the install still gets a
-      // session identity and an (empty) session row, with no bucket.
-      await cw.configureFlutter(
-        prefs: _ThrowingPrefs(),
-        collectDevice: false,
-        idGenerator: () => 'abc123def456ghi',
-      );
-      expect(cw.targeting.userId, equals('abc123def456ghi'));
-      final row = await cw.store.load();
-      expect(row?.bucket, isNull);
-      await cw.dispose();
-    });
+    test(
+      'blocked prefs: memory store stays session-only, never throws',
+      () async {
+        SharedPreferencesAsyncPlatform.instance =
+            InMemorySharedPreferencesAsync.empty();
+        final cw = ConfigWire(
+          apiKey: 'sk-test',
+          env: 'dev',
+          baseUrl: 'http://127.0.0.1:8090',
+          store: MemoryCacheStore(),
+        );
+        // Blocked storage must not break configure even though the bucket
+        // fallback backend throws on every call: the install still gets a
+        // session identity and an (empty) session row, with no bucket.
+        await cw.configureFlutter(
+          prefs: _ThrowingPrefs(),
+          collectDevice: false,
+          idGenerator: () => 'abc123def456ghi',
+        );
+        expect(cw.targeting.userId, equals('abc123def456ghi'));
+        final row = await cw.store.load();
+        expect(row?.bucket, isNull);
+        await cw.dispose();
+      },
+    );
 
-    test('legacy prefixCache override governs the fallback bucket key',
-        () async {
-      final prefs = SharedPreferencesAsync();
-      await prefs.setString('custom.dev.bucket', '9');
-      final cw = memoryClient();
-      await cw.configureFlutter(
-        prefs: prefs,
-        prefixCache: 'custom',
-        collectDevice: false,
-        idGenerator: () => 'abc123def456ghi',
-      );
-      expect((await cw.store.load())!.bucket, equals(9));
-      // Custom prefix isolates: the default key stays empty.
-      expect(await prefs.getString('configwire.dev.bucket'), isNull);
-      await cw.dispose();
-    });
+    test(
+      'legacy prefixCache override governs the fallback bucket key',
+      () async {
+        final prefs = SharedPreferencesAsync();
+        await prefs.setString('custom.dev.bucket', '9');
+        final cw = memoryClient();
+        await cw.configureFlutter(
+          prefs: prefs,
+          prefixCache: 'custom',
+          collectDevice: false,
+          idGenerator: () => 'abc123def456ghi',
+        );
+        expect((await cw.store.load())!.bucket, equals(9));
+        // Custom prefix isolates: the default key stays empty.
+        expect(await prefs.getString('configwire.dev.bucket'), isNull);
+        await cw.dispose();
+      },
+    );
   });
 
   group('frozen emission + wrapper-to-wire bucket handoff', () {
     test('userId still emits ?userHash= with a bucket persisted', () async {
       final prefs = SharedPreferencesAsync();
-      await SharedPreferencesCacheStore(prefs: prefs, env: 'dev')
-          .save(bucketFixture(bucket: 42));
+      await SharedPreferencesCacheStore(
+        prefs: prefs,
+        env: 'dev',
+      ).save(bucketFixture(bucket: 42));
       final cw = ConfigWire(
         apiKey: 'sk-test',
         env: 'dev',
@@ -305,32 +330,35 @@ void main() {
       await cw.dispose();
     });
 
-    test('persisted row bucket reaches cw.bucket on init (T5 ?b= input)',
-        () async {
-      final prefs = SharedPreferencesAsync();
-      await SharedPreferencesCacheStore(prefs: prefs, env: 'dev')
-          .save(bucketFixture(bucket: 42));
-      final cw = ConfigWire(
-        apiKey: 'sk-test',
-        env: 'dev',
-        baseUrl: 'http://127.0.0.1:8090',
-        store: SharedPreferencesCacheStore(env: 'dev'),
-      );
-      // No server is listening: the forced fetch fails gracefully and
-      // keeps the cache-loaded bucket (offline-first, never throws).
-      await cw.configureFlutter(
-        collectDevice: false,
-        idGenerator: () => 'abc123def456ghi',
-        ensureInitialized: true,
-      );
-      expect(cw.bucket, equals(42));
-      expect(cw.etag, equals('e1'));
-      await cw.dispose();
-    });
+    test(
+      'persisted row bucket reaches cw.bucket on init (T5 ?b= input)',
+      () async {
+        final prefs = SharedPreferencesAsync();
+        await SharedPreferencesCacheStore(
+          prefs: prefs,
+          env: 'dev',
+        ).save(bucketFixture(bucket: 42));
+        final cw = ConfigWire(
+          apiKey: 'sk-test',
+          env: 'dev',
+          baseUrl: 'http://127.0.0.1:8090',
+          store: SharedPreferencesCacheStore(env: 'dev'),
+        );
+        // No server is listening: the forced fetch fails gracefully and
+        // keeps the cache-loaded bucket (offline-first, never throws).
+        await cw.configureFlutter(
+          collectDevice: false,
+          idGenerator: () => 'abc123def456ghi',
+          ensureInitialized: true,
+        );
+        expect(cw.bucket, equals(42));
+        expect(cw.etag, equals('e1'));
+        await cw.dispose();
+      },
+    );
 
     test('memory store + seeded fallback reaches cw.bucket on init', () async {
-      await SharedPreferencesAsync()
-          .setString('configwire.dev.bucket', '77');
+      await SharedPreferencesAsync().setString('configwire.dev.bucket', '77');
       final cw = memoryClient();
       await cw.configureFlutter(
         collectDevice: false,

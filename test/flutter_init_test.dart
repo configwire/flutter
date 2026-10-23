@@ -81,8 +81,9 @@ void main() {
     expect(q.containsKey('uid'), isFalse);
     expect(q['userHash'], equals(sha256Hex16(cw.targeting.userId)));
     expect(q['userHash'], matches(RegExp(r'^[0-9a-f]{16}$')));
-    final pinned =
-        await SharedPreferencesAsync().getString('configwire.dev.userId');
+    final pinned = await SharedPreferencesAsync().getString(
+      'configwire.dev.userId',
+    );
     expect(pinned, cw.targeting.userId);
     await cw.dispose();
   });
@@ -107,8 +108,7 @@ void main() {
     await cw.dispose();
   });
 
-  test('relaunch restores the SAME install ID without regenerating',
-      () async {
+  test('relaunch restores the SAME install ID without regenerating', () async {
     var calls = 0;
     String generator() {
       calls++;
@@ -116,22 +116,19 @@ void main() {
     }
 
     final first = _testClient();
-    await first.configureFlutter(
-      collectDevice: false,
-      idGenerator: generator,
-    );
+    await first.configureFlutter(collectDevice: false, idGenerator: generator);
     expect(first.targeting.userId, 'abc123def456ghi');
     expect(calls, 1);
     await first.dispose();
 
     final second = _testClient();
-    await second.configureFlutter(
-      collectDevice: false,
-      idGenerator: generator,
-    );
+    await second.configureFlutter(collectDevice: false, idGenerator: generator);
     expect(second.targeting.userId, 'abc123def456ghi');
-    expect(calls, 1,
-        reason: 'persisted ID must be reused, generator not called again');
+    expect(
+      calls,
+      1,
+      reason: 'persisted ID must be reused, generator not called again',
+    );
     await second.dispose();
   });
 
@@ -142,70 +139,71 @@ void main() {
       idGenerator: () => 'customid1234567',
     );
     expect(cw.targeting.userId, 'customid1234567');
-    final pinned =
-        await SharedPreferencesAsync().getString('configwire.dev.userId');
+    final pinned = await SharedPreferencesAsync().getString(
+      'configwire.dev.userId',
+    );
     expect(pinned, 'customid1234567');
     await cw.dispose();
   });
 
-  test('idGenerator output is trimmed before persisting + emits userHash',
-      () async {
-    final cw = _testClient();
-    await cw.configureFlutter(
-      collectDevice: false,
-      idGenerator: () => '  user-9  ',
-    );
-    expect(cw.targeting.userId, 'user-9');
-    final trimQ = cw.targeting.toQueryParameters();
-    expect(trimQ.containsKey('uid'), isFalse);
-    expect(trimQ['userHash'], equals(sha256Hex16('user-9')));
-    expect(
-      await loadPersistedUserId(prefs: SharedPreferencesAsync(), env: 'dev'),
-      'user-9',
-    );
-    await cw.dispose();
+  test(
+    'idGenerator output is trimmed before persisting + emits userHash',
+    () async {
+      final cw = _testClient();
+      await cw.configureFlutter(
+        collectDevice: false,
+        idGenerator: () => '  user-9  ',
+      );
+      expect(cw.targeting.userId, 'user-9');
+      final trimQ = cw.targeting.toQueryParameters();
+      expect(trimQ.containsKey('uid'), isFalse);
+      expect(trimQ['userHash'], equals(sha256Hex16('user-9')));
+      expect(
+        await loadPersistedUserId(prefs: SharedPreferencesAsync(), env: 'dev'),
+        'user-9',
+      );
+      await cw.dispose();
 
-    // Relaunch reuses the pinned trimmed value without calling again.
-    var calls = 0;
-    final relaunch = _testClient();
-    await relaunch.configureFlutter(
-      collectDevice: false,
-      idGenerator: () {
-        calls++;
-        return 'unused';
-      },
-    );
-    expect(relaunch.targeting.userId, 'user-9');
-    expect(calls, 0);
-    await relaunch.dispose();
-  });
+      // Relaunch reuses the pinned trimmed value without calling again.
+      var calls = 0;
+      final relaunch = _testClient();
+      await relaunch.configureFlutter(
+        collectDevice: false,
+        idGenerator: () {
+          calls++;
+          return 'unused';
+        },
+      );
+      expect(relaunch.targeting.userId, 'user-9');
+      expect(calls, 0);
+      await relaunch.dispose();
+    },
+  );
 
   test('empty-generator output stays anonymous and pins nothing', () async {
     final cw = _testClient();
-    await cw.configureFlutter(
-      collectDevice: false,
-      idGenerator: () => '',
-    );
+    await cw.configureFlutter(collectDevice: false, idGenerator: () => '');
     expect(cw.targeting.userId, isEmpty);
     final anonQ = cw.targeting.toQueryParameters();
     expect(anonQ.containsKey('uid'), isFalse);
     expect(anonQ, isNot(contains('userHash')));
-    final pinned =
-        await SharedPreferencesAsync().getString('configwire.dev.userId');
+    final pinned = await SharedPreferencesAsync().getString(
+      'configwire.dev.userId',
+    );
     expect(pinned, isNull);
     await cw.dispose();
   });
 
-  test('throwing idGenerator degrades to anonymous and pins nothing',
-      () async {
+  test('throwing idGenerator degrades to anonymous and pins nothing', () async {
     final cw = _testClient();
     await cw.configureFlutter(
       collectDevice: false,
       idGenerator: () => throw StateError('no entropy'),
     );
     expect(cw.targeting.userId, isEmpty);
-    final pinned =
-        await SharedPreferencesAsync().getString('configwire.dev.userId');
+    final pinned = await SharedPreferencesAsync().getString(
+      'configwire.dev.userId',
+    );
     expect(pinned, isNull);
     await cw.dispose();
   });
@@ -233,21 +231,24 @@ void main() {
     await cw.dispose();
   });
 
-  test('bare ConfigWire gets a default prefs store with stable install ID',
-      () async {
-    final cw = ConfigWire(
-      apiKey: 'sk-test',
-      env: 'dev',
-      baseUrl: 'http://127.0.0.1:8090',
-    );
-    await cw.configureFlutter(collectDevice: false);
-    expect(cw.store is SharedPreferencesCacheStore, isTrue);
-    expect(cw.targeting.userId, matches(RegExp(r'^[a-z0-9]{15}$')));
-    final pinned =
-        await SharedPreferencesAsync().getString('configwire.dev.userId');
-    expect(pinned, cw.targeting.userId);
-    await cw.dispose();
-  });
+  test(
+    'bare ConfigWire gets a default prefs store with stable install ID',
+    () async {
+      final cw = ConfigWire(
+        apiKey: 'sk-test',
+        env: 'dev',
+        baseUrl: 'http://127.0.0.1:8090',
+      );
+      await cw.configureFlutter(collectDevice: false);
+      expect(cw.store is SharedPreferencesCacheStore, isTrue);
+      expect(cw.targeting.userId, matches(RegExp(r'^[a-z0-9]{15}$')));
+      final pinned = await SharedPreferencesAsync().getString(
+        'configwire.dev.userId',
+      );
+      expect(pinned, cw.targeting.userId);
+      await cw.dispose();
+    },
+  );
 
   test('legacy-seeded configwire.dev.userId is adopted verbatim', () async {
     SharedPreferencesAsyncPlatform.instance =
@@ -293,10 +294,10 @@ void main() {
   test('concurrent configureFlutter calls join a single init', () async {
     final cw = _testClient();
     Future<void> init() => cw.configureFlutter(
-          customAttrs: const {'plan': 'pro'},
-          collectDevice: false,
-          idGenerator: () => 'abc123def456ghi',
-        );
+      customAttrs: const {'plan': 'pro'},
+      collectDevice: false,
+      idGenerator: () => 'abc123def456ghi',
+    );
     await Future.wait([init(), init()]);
     expect(cw.targeting.userId, 'abc123def456ghi');
     expect(cw.targeting.customAttrs, {'plan': 'pro'});
