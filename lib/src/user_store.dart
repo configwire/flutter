@@ -16,12 +16,9 @@ String userIdKeyFor({required String env, String prefixCache = 'configwire'}) =>
 /// Loads the persisted `userId`, or null on miss/empty/error.
 ///
 /// A stored value that is empty after trimming counts as a miss (anonymous).
-///
-/// Deprecated: the server ignores client-sent identity (ephemeral anonID
-/// per request). Persistence stays for the compat window and will be
-/// removed in the next major release; new code should not rely on it for
-/// bucketing stability.
-@Deprecated('Server ignores client identity; persisted userId will be removed next major.')
+/// The server honors a well-formed client hash for bucketing and exposure
+/// identity; only the `sha256hex16` hash of this value travels on the wire
+/// and the raw value is never persisted server-side.
 Future<String?> loadPersistedUserId({
   required SharedPreferencesAsync prefs,
   required String env,
@@ -42,10 +39,6 @@ Future<String?> loadPersistedUserId({
 
 /// Persists `userId` (trimmed; whitespace-only clears instead).
 /// Swallows ALL errors so callers never observe a throw.
-///
-/// Deprecated: the server ignores client-sent identity. Will be removed in
-/// the next major release.
-@Deprecated('Server ignores client identity; persisted userId will be removed next major.')
 Future<void> savePersistedUserId({
   required SharedPreferencesAsync prefs,
   required String env,
@@ -66,10 +59,6 @@ Future<void> savePersistedUserId({
 }
 
 /// Removes the persisted `userId`. Swallows ALL errors.
-///
-/// Deprecated: the server ignores client-sent identity. Will be removed in
-/// the next major release.
-@Deprecated('Server ignores client identity; persisted userId will be removed next major.')
 Future<void> clearPersistedUserId({
   required SharedPreferencesAsync prefs,
   required String env,
@@ -82,26 +71,18 @@ Future<void> clearPersistedUserId({
   }
 }
 
-/// Default `idGenerator` for `ConfigWireFlutter.createConfigWire`: a random
+/// Default `idGenerator` for `configureFlutter`: a random
 /// 15-char lowercase `[a-z0-9]` ID (see [generateUserId]).
 ///
 /// Pass a custom `idGenerator` to supply the first-run ID from your own
 /// source (another SDK, secure storage, tests). It runs at most once per
 /// install: later launches reuse the persisted value without calling it.
-///
-/// Deprecated: generated IDs no longer affect server bucketing (ephemeral
-/// anonID per request). Will be removed in the next major release.
-@Deprecated('Generated IDs no longer affect bucketing; will be removed next major.')
 String defaultIdGenerator() => generateUserId();
 
 /// Generates a random `userId`: 15 lowercase `[a-z0-9]` chars.
 ///
 /// Used when no persisted value exists, so every install stays stably
-/// bucketed for `uid` + percentile targeting. Pass a seeded [source] in tests for determinism.
-///
-/// Deprecated: no longer affects server bucketing. Will be removed in the
-/// next major release.
-@Deprecated('Generated IDs no longer affect bucketing; will be removed next major.')
+/// bucketed for `userHash` + percentile targeting. Pass a seeded [source] in tests for determinism.
 String generateUserId([Random? source]) {
   const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
   final r = source ?? Random.secure();

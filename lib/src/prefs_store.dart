@@ -11,6 +11,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Prefs key: `'<prefixCache>.<Uri.encodeComponent(env)>.cache'`
 /// (default prefix `'configwire'`, e.g. `'configwire.dev.cache'`).
 ///
+/// The T5-managed `CacheData.bucket` slot (server-minted stable bucket
+/// `0-9999`) persists inside this same JSON row beside the verbatim `etag`
+/// — no separate bucket key is used for prefs-backed stores, so the two
+/// can never fork. Rows written before the bucket slot existed load with
+/// `bucket` absent (tolerant parse, never throws).
+///
+/// Reinstall semantics: reinstalling (or clearing app storage) wipes this
+/// row with everything else, so the next launch loads bucket-absent and
+/// the next cold `200` mints a NEW bucket (expected re-roll; the install
+/// ID in `'<prefixCache>.<env>.userId'` is wiped the same way).
+///
 /// Divergence from [CacheStore.save]'s may-throw permission: this store
 /// swallows ALL save errors (blocked storage, denied quota, corrupt
 /// backend) and completes normally, so callers never observe a throw.
@@ -20,10 +31,21 @@ class SharedPreferencesCacheStore implements CacheStore {
     required String env,
     String prefixCache = 'configwire',
   }) : _prefs = prefs ?? SharedPreferencesAsync(),
-       _key = '$prefixCache.${Uri.encodeComponent(env)}.cache';
+        env = env,
+        prefixCache = prefixCache,
+        _key = '$prefixCache.${Uri.encodeComponent(env)}.cache';
 
   final SharedPreferencesAsync _prefs;
   final String _key;
+
+  /// Env namespace of [_key].
+  final String env;
+
+  /// Key prefix of [_key].
+  final String prefixCache;
+
+  /// Exposes the store-owned backend so the restored user_store helpers run on it.
+  SharedPreferencesAsync get prefs => _prefs;
 
   @override
   Future<CacheData?> load() async {

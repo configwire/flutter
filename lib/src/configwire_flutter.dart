@@ -1,3 +1,7 @@
+// ignore_for_file: prefer_initializing_formals
+// (decorator ctor params `inner`/`prefs`/`env` keep their public names for
+// the call-site API; the backing fields are intentionally private, so no
+// initializing formal.)
 import 'package:configwire/configwire.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -39,22 +43,17 @@ import 'user_store.dart';
 /// afterwards, to load the cache plus force-fetch against [baseUrl].
 ///
 /// `userId` persistence: only the install ID is saved to
-/// `SharedPreferencesAsync` under
+/// [SharedPreferencesAsync] under
 /// `'<prefixCache>.<Uri.encodeComponent(env)>.userId'` and restored on
 /// later launches. Nothing else is persisted — never device fields.
 ///
 /// Prefs keys share the `<prefixCache>.<env>.<suffix>` scheme (`suffix` is
 /// `cache` for values, `userId` for the install ID); pass a custom
-/// [prefixCache] to isolate multiple SDK instances in one app. When callers
-/// supply their own [ConfigWire] with a [SharedPreferencesCacheStore], the
-/// [prefixCache] passed to `cw.configureFlutter` must match the one
-/// used for that store so the userId key lines up with `cw.env`. Same for
-/// [prefs]: a custom `prefs` passed to either side must be passed to both,
-/// or cache and install-ID silently read/write different backends.
-///
-/// When nothing is persisted, [idGenerator] (default [defaultIdGenerator]:
-/// a random 15-char lowercase `[a-z0-9]` ID) supplies the value so the
-/// install stays stably bucketed.
+/// [prefixCache] (deprecated, use `store:` instead) to isolate multiple SDK
+/// instances in one app. A store-owned [SharedPreferencesCacheStore]
+/// backend is the source of truth for the install ID; non-prefs stores
+/// fall back to legacy `prefs:`/`prefixCache:` persistence so
+/// Memory-store users keep the stable 0.2.x ID instead of going anonymous.
 abstract final class ConfigWireFlutter {
   /// Per-instance flutter-targeting state. [ConfigWire] lives in the
   /// pure-Dart package and cannot carry Flutter init flags, so the guard
@@ -87,10 +86,13 @@ abstract final class ConfigWireFlutter {
     String Function() idGenerator = defaultIdGenerator,
     Map<String, Object?>? customAttrs,
     bool collectDevice = true,
+    @Deprecated('Use store: with SharedPreferencesCacheStore instead')
     String prefixCache = 'configwire',
     bool ensureInitialized = false,
+    @Deprecated('Use store: with SharedPreferencesCacheStore instead')
     SharedPreferencesAsync? prefs,
     DeviceTargetingCollector? collector,
+    CacheStore? store,
   }) async {
     if (_flutterTargetingDone[cw] == true) {
       if (ensureInitialized) await cw.ensureInitialized();
@@ -110,6 +112,7 @@ abstract final class ConfigWireFlutter {
       prefixCache: prefixCache,
       prefs: prefs,
       collector: collector,
+      store: store,
     );
     _flutterTargetingInFlight[cw] = future;
     try {
@@ -129,30 +132,118 @@ abstract final class ConfigWireFlutter {
     required String prefixCache,
     required SharedPreferencesAsync? prefs,
     required DeviceTargetingCollector? collector,
+    required CacheStore? store,
   }) async {
-    final resolvedPrefs = prefs ?? SharedPreferencesAsync();
-    var userId = await loadPersistedUserId(
-      prefs: resolvedPrefs,
-      env: cw.env,
-      prefixCache: prefixCache,
-    );
-    if (userId == null) {
-      String generated = '';
-      try {
-        generated = idGenerator().trim();
-      } catch (_) {
-        generated = '';
-      }
-      if (generated.isNotEmpty) {
-        userId = generated;
-        await savePersistedUserId(
-          prefs: resolvedPrefs,
+    // Apply store before any cache load; late calls are ignored by setStore.
+    // Explicit `store:` param wins; otherwise attach the default prefs
+    // store (namespaced by cw.env, honoring legacy prefs/prefixCache) only
+    // when no explicit store exists — single source of truth, no env
+    // duplication, no dual-backend split.
+    if (store != null) {
+      cw.setStore(store);
+    } else if (!cw.hasExplicitStore) {
+      cw.setStore(
+        SharedPreferencesCacheStore(
+          prefs: prefs,
           env: cw.env,
-          userId: generated,
           prefixCache: prefixCache,
-        );
+        ),
+      );
+    }
+    // Stable-bucket fallback for non-prefs backing stores: a prefs-backed
+    // store already carries `CacheData.bucket` in its namespaced cache row,
+    // but session-only stores (e.g. `MemoryCacheStore`) have no row
+    // lifecycle, so the bucket would be dropped on every restart. Wrap such
+    // stores so the bucket mirrors through prefs under
+    // `'<prefixCache>.<env>.bucket'` (same scheme as [userIdKeyFor]) and is
+    // merged back into bucket-less rows — the same fallback discipline as
+    // install IDs, which likewise stay stable for non-prefs stores via the
+    // prefs fallback. An explicit legacy `prefs:` or non-default
+    // `prefixCache:` wins for the fallback key exactly as for the ID key.
+    // The wrapper never invents a bucket: it only preserves the T5-managed
+    // `CacheData.bucket` (server-minted, `200`-only) so the fetch wire can
+    // send `?b=` alongside `?userHash=` on the next cold start.
+    final attached = cw.store;
+    if (attached is! SharedPreferencesCacheStore) {
+      cw.setStore(
+        _BucketFallbackCacheStore(
+          inner: attached,
+          prefs: prefs ?? SharedPreferencesAsync(),
+          env: cw.env,
+          prefixCache: prefixCache,
+        ),
+      );
+    }
+    // Stable install ID: store-owned backend when prefs-backed and no
+    // legacy override; else legacy prefs/prefixCache persistence verbatim
+    // (0.2.x exact: `prefs ?? SharedPreferencesAsync()` + `prefixCache`
+    // param, even when that diverges from the cache store). An explicit
+    // legacy `prefs:` or non-default `prefixCache:` always wins for the ID
+    // key so custom-key installs keep their buckets; Memory-store users
+    // keep the 0.2.x stable ID via the prefs fallback (never anonymous
+    // while prefs are writable).
+    var userId = '';
+    final backing = cw.store;
+    final legacyOverride = prefs != null || prefixCache != 'configwire';
+    if (backing is SharedPreferencesCacheStore && !legacyOverride) {
+      final loaded = await loadPersistedUserId(
+        prefs: backing.prefs,
+        env: backing.env,
+        prefixCache: backing.prefixCache,
+      );
+      if (loaded != null && loaded.isNotEmpty) {
+        userId = loaded;
       } else {
-        userId = '';
+        String generated = '';
+        try {
+          generated = idGenerator();
+        } catch (_) {
+          generated = '';
+        }
+        final trimmed = generated.trim();
+        if (trimmed.isNotEmpty) {
+          userId = trimmed;
+          await savePersistedUserId(
+            prefs: backing.prefs,
+            env: backing.env,
+            userId: trimmed,
+            prefixCache: backing.prefixCache,
+          );
+        } else {
+          userId = '';
+        }
+      }
+    } else {
+      final resolvedPrefs = prefs ??
+          (backing is SharedPreferencesCacheStore
+              ? backing.prefs
+              : SharedPreferencesAsync());
+      final loaded = await loadPersistedUserId(
+        prefs: resolvedPrefs,
+        env: cw.env,
+        prefixCache: prefixCache,
+      );
+      if (loaded != null && loaded.isNotEmpty) {
+        userId = loaded;
+      } else {
+        String generated = '';
+        try {
+          generated = idGenerator();
+        } catch (_) {
+          generated = '';
+        }
+        final trimmed = generated.trim();
+        if (trimmed.isNotEmpty) {
+          userId = trimmed;
+          await savePersistedUserId(
+            prefs: resolvedPrefs,
+            env: cw.env,
+            userId: trimmed,
+            prefixCache: prefixCache,
+          );
+        } else {
+          userId = '';
+        }
       }
     }
     Targeting targeting;
@@ -236,14 +327,68 @@ abstract final class ConfigWireFlutter {
     );
     return cw;
   }
+
+  /// Clears the stable bucket on logout/user-switch without touching
+  /// values, etag, version, or targeting — the Flutter dual-key mirror of
+  /// Dart's [ConfigWire.clearBucket] (same name, Flutter namespaced).
+  ///
+  /// Runs Dart's clear (nulls the in-memory bucket and re-persists the
+  /// current row with `bucket: null`, so the next fetch sends no `?b=`;
+  /// for non-prefs stores the attached fallback decorator already drops
+  /// its key through its null path), then removes the prefs fallback key
+  /// via [clearPersistedBucket] on both the store-owned backend (when
+  /// prefs-backed) and the resolved legacy backend, so a stray fallback
+  /// from an earlier configuration can never resurrect. Row-wins
+  /// precedence and reinstall-wipes-row semantics are untouched; clearing
+  /// one env never touches another. Never throws: blocked storage
+  /// degrades to a memory-only clear. Pass the same `prefs:` /
+  /// `prefixCache:` used at configure time when a legacy override was
+  /// used for the fallback key.
+  static Future<void> clearBucket(
+    ConfigWire cw, {
+    SharedPreferencesAsync? prefs,
+    String prefixCache = 'configwire',
+  }) async {
+    await cw.clearBucket();
+    final attached = cw.store;
+    if (attached is SharedPreferencesCacheStore) {
+      await clearPersistedBucket(
+        prefs: attached.prefs,
+        env: attached.env,
+        prefixCache: attached.prefixCache,
+      );
+    }
+    final fallbackPrefs = prefs ??
+        (attached is SharedPreferencesCacheStore
+            ? attached.prefs
+            : SharedPreferencesAsync());
+    await clearPersistedBucket(
+      prefs: fallbackPrefs,
+      env: cw.env,
+      prefixCache: prefixCache,
+    );
+  }
 }
 
 /// Flutter entry point on your own [ConfigWire]:
 /// `await cw.configureFlutter(...)` resolves the install ID + device
 /// targeting, calls `cw.setTargeting`, and optionally runs
 /// [ConfigWire.ensureInitialized].
+///
+/// First launch generates a stable install ID via [idGenerator], persists
+/// it in the [SharedPreferencesCacheStore] backend, and reuses it on later
+/// launches (non-prefs stores fall back to legacy `prefs:`/`prefixCache:`
+/// persistence so 0.2.x installs keep their buckets). See
+/// [ConfigWireFlutter] for the store contract.
 extension ConfigWireFlutterExtension on ConfigWire {
   /// One-shot Flutter init for this [ConfigWire].
+  ///
+  /// A [ConfigWire] built without an explicit store gets a default
+  /// [SharedPreferencesCacheStore] namespaced by `cw.env` (single source
+  /// of truth, no env duplication; legacy `prefs:`/`prefixCache:` are
+  /// honored for the auto-attached store). Precedence is explicit `store:`
+  /// param > explicit ctor store > auto-default. Applied via
+  /// [ConfigWire.setStore] before any cache load. Late calls are ignored.
   ///
   /// Safe to call multiple times: targeting resolves once (first-call-wins;
   /// concurrent callers join the same in-flight future and later callers
@@ -252,23 +397,187 @@ extension ConfigWireFlutterExtension on ConfigWire {
   /// pass `true` or call [ConfigWire.ensureInitialized] afterwards for
   /// the cache load plus forced fetch.
   ///
-  /// Never throws (see [ConfigWireFlutter]).
+  /// Never throws: device collection degrades per-field for the default
+  /// collector (identity-only for a throwing custom collector), install-ID
+  /// generation failures degrade to anonymous `''`, and
+  /// [ConfigWire.ensureInitialized] never throws.
   Future<void> configureFlutter({
     String Function() idGenerator = defaultIdGenerator,
     Map<String, Object?>? customAttrs,
     bool collectDevice = true,
+    @Deprecated('Use store: with SharedPreferencesCacheStore instead')
     String prefixCache = 'configwire',
     bool ensureInitialized = false,
+    @Deprecated('Use store: with SharedPreferencesCacheStore instead')
     SharedPreferencesAsync? prefs,
     DeviceTargetingCollector? collector,
-  }) => ConfigWireFlutter._configureFlutter(
-    this,
-    idGenerator: idGenerator,
-    customAttrs: customAttrs,
-    collectDevice: collectDevice,
-    prefixCache: prefixCache,
-    ensureInitialized: ensureInitialized,
-    prefs: prefs,
-    collector: collector,
-  );
+    CacheStore? store,
+    }) => ConfigWireFlutter._configureFlutter(
+      this,
+      idGenerator: idGenerator,
+      customAttrs: customAttrs,
+      collectDevice: collectDevice,
+      prefixCache: prefixCache,
+      ensureInitialized: ensureInitialized,
+      prefs: prefs,
+      collector: collector,
+      store: store,
+    );
+}
+
+/// Prefs key for the stable-bucket fallback:
+/// `'<prefixCache>.<Uri.encodeComponent(env)>.bucket'`
+/// (default prefix `'configwire'`, e.g. `'configwire.dev.bucket'`).
+///
+/// Same namespacing scheme as [userIdKeyFor]; only the suffix differs
+/// (`bucket` vs `userId` vs the cache row's `cache`). Used solely for
+/// non-prefs backing stores, whose cache rows are session-only — prefs
+/// backed stores carry the bucket in the row itself and never touch this
+/// key, so the two sources can never fork.
+String _bucketKeyFor({required String env, String prefixCache = 'configwire'}) =>
+    '$prefixCache.${Uri.encodeComponent(env)}.bucket';
+
+/// Canonical bucket validation: plain `0`-`9999` ints only.
+/// Wrong shapes and out-of-range values parse as absent (null), mirroring
+/// the tolerant `CacheData.bucket` rule (never coerced, never throws).
+bool _isCanonicalBucket(Object? raw) =>
+    raw is int && raw >= 0 && raw <= 9999;
+
+/// Loads the fallback bucket, or null on miss/invalid/error.
+///
+/// A stored value parses only when it is a plain `0`-`9999` int string
+/// (`"007"`, whitespace-padded, floats, and out-of-range values count as
+/// absent). Blocked storage degrades to load-absent: never throws (parity
+/// with the `user_store` discipline).
+Future<int?> _loadPersistedBucket({
+  required SharedPreferencesAsync prefs,
+  required String env,
+  String prefixCache = 'configwire',
+}) async {
+  try {
+    final raw = await prefs.getString(
+      _bucketKeyFor(env: env, prefixCache: prefixCache),
+    );
+    if (raw == null) return null;
+    final parsed = int.tryParse(raw);
+    if (parsed == null || !_isCanonicalBucket(parsed)) return null;
+    // `int.tryParse` accepts a leading `+` (`"+42"`) and surrounding
+    // whitespace; the canonical form is the plain round-trip, so anything
+    // else counts as absent (mirrors the strict `?b=` server rule).
+    if (parsed.toString() != raw) return null;
+    return parsed;
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Persists the fallback bucket. Swallows ALL errors so callers never
+/// observe a throw. A null (or non-canonical) bucket clears the key
+/// instead, so stale fallbacks can never resurrect past their row.
+Future<void> _savePersistedBucket({
+  required SharedPreferencesAsync prefs,
+  required String env,
+  required int? bucket,
+  String prefixCache = 'configwire',
+}) async {
+  try {
+    final key = _bucketKeyFor(env: env, prefixCache: prefixCache);
+    if (bucket != null && _isCanonicalBucket(bucket)) {
+      await prefs.setString(key, bucket.toString());
+    } else {
+      await prefs.remove(key);
+    }
+  } catch (_) {
+    // Swallow: blocked storage degrades to save-noop by design.
+  }
+}
+
+/// Removes the persisted fallback bucket. Swallows ALL errors so callers
+/// never observe a throw (parity with the `user_store` discipline).
+Future<void> clearPersistedBucket({
+  required SharedPreferencesAsync prefs,
+  required String env,
+  String prefixCache = 'configwire',
+}) async {
+  try {
+    await prefs.remove(_bucketKeyFor(env: env, prefixCache: prefixCache));
+  } catch (_) {
+    // Swallow: blocked storage degrades to clear-noop by design.
+  }
+}
+
+/// [CacheStore] decorator preserving the stable bucket for non-prefs
+/// backing stores (session-only rows).
+///
+/// * `load()` delegates to the inner store, then fills a missing bucket
+///   from the prefs fallback (row bucket always wins when present). When
+///   the inner store is cold (null) but a fallback bucket exists, a
+///   minimal row carrying just the bucket is synthesized: empty etag (so
+///   no `If-None-Match` is sent), version 0, and empty values over the
+///   in-app defaults — behaviorally identical to a cold cache except the
+///   fetch wire can send `?b=`.
+/// * `save()` delegates verbatim (inner error semantics preserved), then
+///   best-effort mirrors `data.bucket` to the fallback key (clearing it
+///   when the saved row is bucket-less).
+///
+/// Never throws itself: fallback I/O swallows all errors, and inner
+/// `load()` errors propagate exactly as the undecorated store would
+/// produce them (the client's init treats a throwing load as a cold
+/// cache). Reinstall wipes prefs with everything else, so a reinstalled
+/// app loads bucket-absent and the next cold `200` mints a new bucket.
+class _BucketFallbackCacheStore implements CacheStore {
+  _BucketFallbackCacheStore({
+    required CacheStore inner,
+    required SharedPreferencesAsync prefs,
+    required String env,
+    String prefixCache = 'configwire',
+  })  : _inner = inner,
+        _prefs = prefs,
+        _env = env,
+        _prefixCache = prefixCache;
+
+  final CacheStore _inner;
+  final SharedPreferencesAsync _prefs;
+  final String _env;
+  final String _prefixCache;
+
+  @override
+  Future<CacheData?> load() async {
+    final row = await _inner.load();
+    final fallback = await _loadPersistedBucket(
+      prefs: _prefs,
+      env: _env,
+      prefixCache: _prefixCache,
+    );
+    if (fallback == null) return row;
+    if (row == null) {
+      return CacheData(
+        etag: '',
+        version: 0,
+        fetchedAt: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+        values: const {},
+        bucket: fallback,
+      );
+    }
+    if (row.bucket != null) return row;
+    return CacheData(
+      etag: row.etag,
+      version: row.version,
+      fetchedAt: row.fetchedAt,
+      values: Map<String, Object?>.from(row.values),
+      variants: Map<String, String>.from(row.variants),
+      bucket: fallback,
+    );
+  }
+
+  @override
+  Future<void> save(CacheData data) async {
+    await _inner.save(data);
+    await _savePersistedBucket(
+      prefs: _prefs,
+      env: _env,
+      bucket: data.bucket,
+      prefixCache: _prefixCache,
+    );
+  }
 }
