@@ -16,9 +16,18 @@ String userIdKeyFor({required String env, String prefixCache = 'configwire'}) =>
 /// Loads the persisted `userId`, or null on miss/empty/error.
 ///
 /// A stored value that is empty after trimming counts as a miss (anonymous).
-/// The server honors a well-formed client hash for bucketing and exposure
-/// identity; only the `sha256hex16` hash of this value travels on the wire
+/// Only the `sha256hex16` hash of this value travels on the wire
 /// and the raw value is never persisted server-side.
+///
+/// Deprecated: the server ignores `userHash` for bucketing
+/// (accepted-but-ignored, `X-CW-Deprecated-userHash` compat header
+/// stamped). Persistence stays for the compat window; new code should
+/// stop sending identity and rely on the stable `?b=` bucket. Will be
+/// removed in the next major release.
+@Deprecated(
+  'Server ignores userHash for bucketing (accepted-but-ignored, compat header stamped); '
+  'stop sending userId and rely on the stable ?b= bucket; will be removed in the next major release.',
+)
 Future<String?> loadPersistedUserId({
   required SharedPreferencesAsync prefs,
   required String env,
@@ -39,6 +48,14 @@ Future<String?> loadPersistedUserId({
 
 /// Persists `userId` (trimmed; whitespace-only clears instead).
 /// Swallows ALL errors so callers never observe a throw.
+///
+/// Deprecated: the server ignores `userHash` for bucketing
+/// (accepted-but-ignored). Persistence stays for the compat window; will
+/// be removed in the next major release.
+@Deprecated(
+  'Server ignores userHash for bucketing (accepted-but-ignored, compat header stamped); '
+  'stop sending userId and rely on the stable ?b= bucket; will be removed in the next major release.',
+)
 Future<void> savePersistedUserId({
   required SharedPreferencesAsync prefs,
   required String env,
@@ -59,6 +76,13 @@ Future<void> savePersistedUserId({
 }
 
 /// Removes the persisted `userId`. Swallows ALL errors.
+///
+/// Deprecated: the server ignores `userHash` for bucketing
+/// (accepted-but-ignored). Will be removed in the next major release.
+@Deprecated(
+  'Server ignores userHash for bucketing (accepted-but-ignored, compat header stamped); '
+  'stop sending userId and rely on the stable ?b= bucket; will be removed in the next major release.',
+)
 Future<void> clearPersistedUserId({
   required SharedPreferencesAsync prefs,
   required String env,
@@ -77,12 +101,28 @@ Future<void> clearPersistedUserId({
 /// Pass a custom `idGenerator` to supply the first-run ID from your own
 /// source (another SDK, secure storage, tests). It runs at most once per
 /// install: later launches reuse the persisted value without calling it.
+///
+/// Deprecated: the server ignores `userHash` for bucketing
+/// (accepted-but-ignored); generated IDs stay for the compat window only.
+/// Stop sending identity and rely on the stable `?b=` bucket. Will be
+/// removed in the next major release.
+@Deprecated(
+  'Server ignores userHash for bucketing (accepted-but-ignored, compat header stamped); '
+  'stop sending userId and rely on the stable ?b= bucket; will be removed in the next major release.',
+)
 String defaultIdGenerator() => generateUserId();
 
 /// Generates a random `userId`: 15 lowercase `[a-z0-9]` chars.
 ///
 /// Used when no persisted value exists, so every install stays stably
 /// bucketed for `userHash` + percentile targeting. Pass a seeded [source] in tests for determinism.
+///
+/// Deprecated: the server ignores `userHash` for bucketing
+/// (accepted-but-ignored). Will be removed in the next major release.
+@Deprecated(
+  'Server ignores userHash for bucketing (accepted-but-ignored, compat header stamped); '
+  'stop sending userId and rely on the stable ?b= bucket; will be removed in the next major release.',
+)
 String generateUserId([Random? source]) {
   const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
   final r = source ?? Random.secure();
