@@ -1,3 +1,6 @@
+// ignore_for_file: deprecated_member_use
+// Compat suite: intentionally exercises deprecated Targeting.country
+// (accepted-but-ignored until next major).
 // Suite for the device targeting collector (`lib/src/device_targeting.dart`).
 //
 // Contract under test (from `client/dart/lib/src/targeting.dart` and
