@@ -1,3 +1,29 @@
+## 0.2.2
+
+* Backward compatible with 0.2.x: no migration needed — old calls
+  compile and behave as before. `ConfigWireFlutter.createConfigWire`
+  is restored (deprecated, use your own `ConfigWire` +
+  `cw.configureFlutter()` instead), and `configureFlutter` accepts the
+  legacy `prefs:` / `prefixCache:` args again (deprecated, use `store:`
+  with `SharedPreferencesCacheStore` instead). An explicit legacy
+  `prefs:` or non-default `prefixCache:` still governs the install-ID
+  key verbatim, and non-prefs stores keep the 0.2.x stable ID via the
+  prefs fallback instead of going anonymous — existing
+  `<prefix>.<env>.userId` keys are adopted as-is, no reshuffle.
+* Added: `configureFlutter` gains `store: CacheStore?` (explicit
+  `store:` param > explicit ctor store > auto-attached
+  `SharedPreferencesCacheStore(env: cw.env)` honoring legacy
+  `prefs:`/`prefixCache:`), so a bare `ConfigWire(...)` plus
+  `configureFlutter()` gets disk persistence and a stable install ID.
+  Stable install IDs via the `user_store` helpers
+  (`loadPersistedUserId` / `savePersistedUserId` /
+  `clearPersistedUserId` / `userIdKeyFor` / `defaultIdGenerator` /
+  `generateUserId`, deprecations lifted) running on the store-owned
+  backend (`SharedPreferencesCacheStore.prefs`). Only
+  `?userHash=<sha256hex16>` leaves the device; the server honors a
+  well-formed client hash for bucketing/exposure identity and falls
+  back to its daily anonID otherwise.
+
 ## 0.2.1
 
 * Bring-your-own `ConfigWire.configureFlutter(...)` extension
