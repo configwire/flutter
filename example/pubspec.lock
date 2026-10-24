@@ -47,14 +47,14 @@ packages:
       path: "../../dart"
       relative: true
     source: path
-    version: "0.3.2"
+    version: "0.3.3"
   configwire_flutter:
     dependency: "direct main"
     description:
       path: ".."
       relative: true
     source: path
-    version: "0.2.2"
+    version: "0.2.3"
   crypto:
     dependency: transitive
     description:

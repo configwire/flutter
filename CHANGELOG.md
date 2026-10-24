@@ -1,3 +1,11 @@
+## 0.2.3
+
+* Docs only, no code change: `README.md` aligned with the wire
+  contract and the companion source (stable `?b=` bucket persistence /
+  `<prefix>.<env>.bucket` fallback / `clearBucket`,
+  `?userHash=` / `?country=` accepted-but-ignored deprecation, fixed
+  pure-Dart client link). Requires `configwire ^0.3.2` or later.
+
 ## 0.2.2
 
 * Backward compatible with 0.2.x: no migration needed — old calls
