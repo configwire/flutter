@@ -20,9 +20,14 @@
   `clearPersistedUserId` / `userIdKeyFor` / `defaultIdGenerator` /
   `generateUserId`, deprecations lifted) running on the store-owned
   backend (`SharedPreferencesCacheStore.prefs`). Only
-  `?userHash=<sha256hex16>` leaves the device; the server honors a
-  well-formed client hash for bucketing/exposure identity and falls
-  back to its daily anonID otherwise.
+  `?userHash=<sha256hex16>` leaves the device; the server ignores
+  `userHash` for bucketing/exposure identity (accepted-but-ignored,
+  `X-CW-Deprecated-userHash` compat header stamped) and buckets from
+  its daily anonID unless a valid `?b=` overrides it.
+* Stable bucket `?b=`: the companion persists the server-minted `bucket`
+  first-write-wins (prefs fallback keeps the 0.2.x stable ID instead of
+  going anonymous) and sends it as `?b=` on fetch and events, so
+  bucketing survives daily anonID rotation.
 
 ## 0.2.1
 
