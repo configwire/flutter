@@ -67,6 +67,9 @@ Future<void> main() async {
 
 ## Targeting
 
+> Bucket (`?b=0-9999`) is the primary identity and the only identity kept in `configwire server v0.2.0`.
+> Server-derived anonID plus `userId`/`country` emission are backward-compat shims only.
+
 Targeting attributes are sent as fetch query params so the server can
 evaluate `rules` per fetch. Collection is automatic
 (`package_info_plus`; locale needs no extra dependency).
@@ -87,9 +90,9 @@ the param is omitted):
 
 Identity is a random per-install value: only its SHA-256 hash (truncated to
 16 hex chars) ever leaves the device, and the server stores no raw identity.
-The hash emission stays for the compat window only — the server ignores it
-for bucketing and exposure identity, so experiment arms ride the stable
-`?b=` bucket instead: each evaluated `200` mints a `bucket` (`0`-`9999`)
+The hash emission stays for the compat window only and is removed in `configwire server v0.2.0` (bucket-only) — the server ignores it
+for bucketing and exposure identity, so experiment arms ride the primary stable
+`?b=` bucket: each evaluated `200` mints a `bucket` (`0`-`9999`)
 that persists first-write-wins and is sent as `?b=` on fetch and events,
 surviving the server's daily anonID rotation.
 Non-prefs stores keep the 0.2.x stable ID via the prefs fallback (legacy
