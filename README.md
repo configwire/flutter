@@ -1,6 +1,6 @@
 # configwire_flutter
 
-Flutter companion to the pure-Dart [configwire](https://github.com/configwire/configwire) client
+Flutter companion to the pure-Dart [configwire](https://github.com/configwire/dart) client
 (fetch, cache, typed getters, realtime).
 One call supplies the two Flutter-specific pieces the pure-Dart client
 cannot provide on its own: a `SharedPreferencesAsync`-backed `CacheStore`
@@ -19,7 +19,7 @@ Or pin it in your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  configwire_flutter: ^0.2.0
+  configwire_flutter: ^0.2.2
 ```
 
 Then `flutter pub get`.
@@ -62,8 +62,8 @@ Future<void> main() async {
 > `cw.configureFlutter` wires Flutter-side targeting onto your own
 > `configwire` `ConfigWire`. Read more
 > in the [`configwire`](https://pub.dev/packages/configwire) package:
-> reading values, variants, fetch lifecycle, realtime, analytics,
-> logging, and cache.
+> reading values, variants, fetch lifecycle, targeting, stable `?b=`
+> bucket, realtime, analytics, logging, and cache.
 
 ## Targeting
 
@@ -78,18 +78,31 @@ the param is omitted):
 
 | Field         | Query param              | Default value                                                                                                                   | Source                  |
 | ------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| `userId`      | `?userHash=`             | Stable install ID: a 15-char lowercase `[a-z0-9]` ID, generated once and persisted, emitted as `?userHash=<sha256hex16>` at fetch time. Customize the first-run value only via `idGenerator` (default `defaultIdGenerator`, built on `generateUserId`) | Persistence via the restored `user_store` helpers on the store-owned backend |
+| `userId`      | `?userHash=` (deprecated, compat-only) | Stable install ID: a 15-char lowercase `[a-z0-9]` ID, generated once and persisted, emitted as `?userHash=<sha256hex16>` at fetch time. Customize the first-run value only via `idGenerator` (default `defaultIdGenerator`, built on `generateUserId`). Deprecated: the server ignores `userHash` for bucketing/exposure identity (accepted-but-ignored, `X-CW-Deprecated-userHash`); bucketing rides the stable `?b=` slot below | Persistence via the restored `user_store` helpers on the store-owned backend |
 | `platform`    | `?platform=`             | `android` \| `ios` \| `macos` \| `windows` \| `linux` \| `fuchsia` \| `web` (`kIsWeb` forces `web`)                             | `defaultTargetPlatform` |
 | `appVersion`  | `?appVersion=`           | Package version with `+build` metadata stripped for strict-semver compare (e.g. `1.0.0+1` → `1.0.0`); empty (omitted) when unreadable | `package_info_plus`     |
 | `locale`      | `?locale=`               | `toLanguageTag` (e.g. `en-US`); empty (omitted) when unreadable                                                               | `PlatformDispatcher.locale` |
-| `country`     | `?country=`              | `countryCode` (e.g. `US`); empty (omitted) when absent or unreadable                                                           | `PlatformDispatcher.locale` |
+| `country`     | `?country=` (deprecated, ignored) | `countryCode` (e.g. `US`); empty (omitted) when absent or unreadable. Deprecated: the server derives country from request headers and ignores the client-sent value | `PlatformDispatcher.locale` |
 | `customAttrs` | `?attrs=` (compact JSON) | `{}` (omitted) unless passed via `cw.configureFlutter(customAttrs:)`                                                           | Caller input            |
 
 Identity is a random per-install value: only its SHA-256 hash (truncated to
 16 hex chars) ever leaves the device, and the server stores no raw identity.
+The hash emission stays for the compat window only — the server ignores it
+for bucketing and exposure identity, so experiment arms ride the stable
+`?b=` bucket instead: each evaluated `200` mints a `bucket` (`0`-`9999`)
+that persists first-write-wins and is sent as `?b=` on fetch and events,
+surviving the server's daily anonID rotation.
 Non-prefs stores keep the 0.2.x stable ID via the prefs fallback (legacy
 `prefs:`/`prefixCache:` persistence), so no install goes anonymous while
-prefs are writable.
+prefs are writable. The bucket gets the same fallback discipline:
+prefs-backed stores carry it in the namespaced cache row, while
+session-only stores (e.g. `MemoryCacheStore`) mirror it through prefs
+under `<prefix>.<env>.bucket` and merge it back into bucket-less rows —
+the wrapper never invents a bucket, only preserves the server-minted one.
+On logout/user-switch call `ConfigWireFlutter.clearBucket(cw)` (the
+Flutter mirror of `cw.clearBucket()`): it nulls the in-memory bucket,
+re-persists the row with `bucket: null`, and removes the prefs fallback
+key, so the next fetch sends no `?b=`.
 
 Bare `ConfigWire(...)` plus `configureFlutter()` gets disk persistence
 and a stable install ID via an auto-attached
