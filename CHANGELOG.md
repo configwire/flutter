@@ -1,4 +1,4 @@
-## 0.2.3
+## 0.3.0-rc.1
 
 * **Breaking:** install-ID removal for `configwire server v0.2.0-rc.1`
   (released 2026-10-25, bucket-only): `README.md` aligned with the wire
@@ -9,7 +9,15 @@
   Drop any custom install-ID wiring and rely on the stable `?b=`
   bucket. The server ignores identity inputs without rejecting them
   and never rejects an empty or missing `?b=`. Requires
-  `configwire ^0.3.2` or later.
+  `configwire ^0.4.0-rc.1` or later.
+
+## 0.2.3
+
+* Docs only, no code change: `README.md` aligned with the wire
+  contract and the companion source (stable `?b=` bucket persistence /
+  `<prefix>.<env>.bucket` fallback / `clearBucket`,
+  `?userHash=` / `?country=` accepted-but-ignored deprecation, fixed
+  pure-Dart client link). Requires `configwire ^0.3.2` or later.
 
 ## 0.2.2
 

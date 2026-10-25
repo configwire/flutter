@@ -19,7 +19,7 @@ Or pin it in your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  configwire_flutter: ^0.2.3
+  configwire_flutter: ^0.3.0-rc.1
 ```
 
 Then `flutter pub get`.
