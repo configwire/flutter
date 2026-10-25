@@ -7,7 +7,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'device_targeting.dart';
 import 'prefs_store.dart';
-import 'user_store.dart';
 
 /// Factory namespace for building a fully-wired [ConfigWire] on Flutter.
 ///
@@ -27,33 +26,30 @@ import 'user_store.dart';
 ///   (deprecated, use `cw.configureFlutter` instead) builds a prefs-backed
 ///   [ConfigWire] and runs the same init.
 ///
-/// Identity: a stable install ID, customizable only via [idGenerator].
-/// * First launch with nothing persisted: [idGenerator] supplies the ID,
-///   which is then persisted. Later launches reuse the persisted value
-///   and never call the generator again.
-/// * [idGenerator] returning `''` stays anonymous for that launch and
-///   pins nothing, so the next launch tries again.
-/// * [collectDevice] (default true) fills platform/appVersion/locale/country
-///   around the ID; false skips device collection entirely.
-/// * Only the install ID is ever persisted — never device fields.
+/// Identity: targeting is always anonymous — the former stable install-ID
+/// surface (custom ID generator, persisted install ID, `?userHash=`
+/// emission) has been removed. Bucketing rides the stable `?b=` slot.
+/// * First launch and later launches behave identically: no ID is
+///   generated, persisted, or read back.
+/// * [collectDevice] (default true) fills platform/appVersion/locale/country;
+///   false skips device collection entirely.
+/// * Only the stable `?b=` bucket is ever persisted — never device fields.
 ///
 /// Like the core `ConfigWire` constructor, configuring never fetches:
 /// `ensureInitialized` defaults to `false` (targeting only — hermetic, no
 /// network). Pass `true`, or call [ConfigWire.ensureInitialized]
 /// afterwards, to load the cache plus force-fetch against [baseUrl].
 ///
-/// `userId` persistence: only the install ID is saved to
-/// [SharedPreferencesAsync] under
-/// `'<prefixCache>.<Uri.encodeComponent(env)>.userId'` and restored on
-/// later launches. Nothing else is persisted — never device fields.
+/// Targeting is always anonymous: no install ID is saved to
+/// [SharedPreferencesAsync] and nothing identity-like is restored on
+/// later launches. Bucketing rides the stable `?b=` slot.
 ///
 /// Prefs keys share the `<prefixCache>.<env>.<suffix>` scheme (`suffix` is
-/// `cache` for values, `userId` for the install ID); pass a custom
+/// `cache` for values, `bucket` for the non-prefs fallback); pass a custom
 /// [prefixCache] (deprecated, use `store:` instead) to isolate multiple SDK
-/// instances in one app. A store-owned [SharedPreferencesCacheStore]
-/// backend is the source of truth for the install ID; non-prefs stores
-/// fall back to legacy `prefs:`/`prefixCache:` persistence so
-/// Memory-store users keep the stable 0.2.x ID instead of going anonymous.
+/// instances in one app. Prefs-backed stores carry the stable `?b=`
+/// bucket in the cache row; non-prefs stores mirror it through the
+/// `prefs:`/`prefixCache:` fallback so the bucket still survives restarts.
 abstract final class ConfigWireFlutter {
   /// Per-instance flutter-targeting state. [ConfigWire] lives in the
   /// pure-Dart package and cannot carry Flutter init flags, so the guard
@@ -77,13 +73,12 @@ abstract final class ConfigWireFlutter {
   /// dedupes itself — so a first call with `ensureInitialized: false`
   /// (targeting only) followed by a call with `true` still fetches.
   ///
-  /// Never throws: persisted-ID I/O swallows errors, [idGenerator]
-  /// failures degrade to anonymous, device collection degrades
-  /// (per-field for the default collector, identity-only for a throwing
-  /// custom collector), and [ConfigWire.ensureInitialized] never throws.
+  /// Never throws: bucket-fallback I/O swallows errors, device collection
+  /// degrades (per-field for the default collector, identity-only for a
+  /// throwing custom collector), and [ConfigWire.ensureInitialized] never
+  /// throws.
   static Future<void> _configureFlutter(
     ConfigWire cw, {
-    String Function() idGenerator = defaultIdGenerator,
     Map<String, Object?>? customAttrs,
     bool collectDevice = true,
     @Deprecated('Use store: with SharedPreferencesCacheStore instead')
@@ -106,7 +101,6 @@ abstract final class ConfigWireFlutter {
     }
     final future = _resolveFlutterTargeting(
       cw,
-      idGenerator: idGenerator,
       customAttrs: customAttrs,
       collectDevice: collectDevice,
       prefixCache: prefixCache,
@@ -126,7 +120,6 @@ abstract final class ConfigWireFlutter {
 
   static Future<void> _resolveFlutterTargeting(
     ConfigWire cw, {
-    required String Function() idGenerator,
     required Map<String, Object?>? customAttrs,
     required bool collectDevice,
     required String prefixCache,
@@ -155,14 +148,12 @@ abstract final class ConfigWireFlutter {
     // but session-only stores (e.g. `MemoryCacheStore`) have no row
     // lifecycle, so the bucket would be dropped on every restart. Wrap such
     // stores so the bucket mirrors through prefs under
-    // `'<prefixCache>.<env>.bucket'` (same scheme as [userIdKeyFor]) and is
-    // merged back into bucket-less rows — the same fallback discipline as
-    // install IDs, which likewise stay stable for non-prefs stores via the
-    // prefs fallback. An explicit legacy `prefs:` or non-default
-    // `prefixCache:` wins for the fallback key exactly as for the ID key.
+    // `'<prefixCache>.<env>.bucket'` and is
+    // merged back into bucket-less rows. An explicit legacy `prefs:` or
+    // non-default `prefixCache:` wins for the fallback key.
     // The wrapper never invents a bucket: it only preserves the T5-managed
     // `CacheData.bucket` (server-minted, `200`-only) so the fetch wire can
-    // send `?b=` alongside `?userHash=` on the next cold start.
+    // send `?b=` on the next cold start.
     final attached = cw.store;
     if (attached is! SharedPreferencesCacheStore) {
       cw.setStore(
@@ -174,96 +165,23 @@ abstract final class ConfigWireFlutter {
         ),
       );
     }
-    // Stable install ID: store-owned backend when prefs-backed and no
-    // legacy override; else legacy prefs/prefixCache persistence verbatim
-    // (0.2.x exact: `prefs ?? SharedPreferencesAsync()` + `prefixCache`
-    // param, even when that diverges from the cache store). An explicit
-    // legacy `prefs:` or non-default `prefixCache:` always wins for the ID
-    // key so custom-key installs keep their buckets; Memory-store users
-    // keep the 0.2.x stable ID via the prefs fallback (never anonymous
-    // while prefs are writable).
-    var userId = '';
-    final backing = cw.store;
-    final legacyOverride = prefs != null || prefixCache != 'configwire';
-    if (backing is SharedPreferencesCacheStore && !legacyOverride) {
-      final loaded = await loadPersistedUserId(
-        prefs: backing.prefs,
-        env: backing.env,
-        prefixCache: backing.prefixCache,
-      );
-      if (loaded != null && loaded.isNotEmpty) {
-        userId = loaded;
-      } else {
-        String generated = '';
-        try {
-          generated = idGenerator();
-        } catch (_) {
-          generated = '';
-        }
-        final trimmed = generated.trim();
-        if (trimmed.isNotEmpty) {
-          userId = trimmed;
-          await savePersistedUserId(
-            prefs: backing.prefs,
-            env: backing.env,
-            userId: trimmed,
-            prefixCache: backing.prefixCache,
-          );
-        } else {
-          userId = '';
-        }
-      }
-    } else {
-      final resolvedPrefs =
-          prefs ??
-          (backing is SharedPreferencesCacheStore
-              ? backing.prefs
-              : SharedPreferencesAsync());
-      final loaded = await loadPersistedUserId(
-        prefs: resolvedPrefs,
-        env: cw.env,
-        prefixCache: prefixCache,
-      );
-      if (loaded != null && loaded.isNotEmpty) {
-        userId = loaded;
-      } else {
-        String generated = '';
-        try {
-          generated = idGenerator();
-        } catch (_) {
-          generated = '';
-        }
-        final trimmed = generated.trim();
-        if (trimmed.isNotEmpty) {
-          userId = trimmed;
-          await savePersistedUserId(
-            prefs: resolvedPrefs,
-            env: cw.env,
-            userId: trimmed,
-            prefixCache: prefixCache,
-          );
-        } else {
-          userId = '';
-        }
-      }
-    }
+    // No install-ID surface remains: targeting resolves anonymously and
+    // bucketing rides the stable `?b=` slot.
     Targeting targeting;
     if (collectDevice) {
-      // A custom collector may throw; degrade to identity-only rather than
-      // breaking the never-throws contract (the default collector already
-      // degrades per-field internally and never throws itself).
+      // A custom collector may throw; degrade to customAttrs-only rather
+      // than breaking the never-throws contract (the default collector
+      // already degrades per-field internally and never throws itself).
       try {
         targeting = await (collector ?? DeviceTargetingCollector())
-            .resolveDeviceTargeting(userId, customAttrs ?? {});
+            .resolveDeviceTargeting(customAttrs ?? {});
       } catch (_) {
         targeting = Targeting(
-          userId: userId,
           customAttrs: Map<String, Object?>.of(customAttrs ?? {}),
         );
       }
     } else {
       targeting = Targeting(
-        userId: userId,
         customAttrs: Map<String, Object?>.of(customAttrs ?? {}),
       );
     }
@@ -293,7 +211,6 @@ abstract final class ConfigWireFlutter {
     required String env,
     required String baseUrl,
     Map<String, Object?> defaults = const {},
-    String Function() idGenerator = defaultIdGenerator,
     Map<String, Object?>? customAttrs,
     bool collectDevice = true,
     String prefixCache = 'configwire',
@@ -319,7 +236,6 @@ abstract final class ConfigWireFlutter {
     );
     await _configureFlutter(
       cw,
-      idGenerator: idGenerator,
       customAttrs: customAttrs,
       collectDevice: collectDevice,
       prefixCache: prefixCache,
@@ -373,15 +289,13 @@ abstract final class ConfigWireFlutter {
 }
 
 /// Flutter entry point on your own [ConfigWire]:
-/// `await cw.configureFlutter(...)` resolves the install ID + device
+/// `await cw.configureFlutter(...)` resolves device
 /// targeting, calls `cw.setTargeting`, and optionally runs
 /// [ConfigWire.ensureInitialized].
 ///
-/// First launch generates a stable install ID via [idGenerator], persists
-/// it in the [SharedPreferencesCacheStore] backend, and reuses it on later
-/// launches (non-prefs stores fall back to legacy `prefs:`/`prefixCache:`
-/// persistence so 0.2.x installs keep their buckets). See
-/// [ConfigWireFlutter] for the store contract.
+/// Targeting is always anonymous: the former install-ID surface has been
+/// removed and nothing identity-like is emitted; bucketing rides the
+/// stable `?b=` slot. See [ConfigWireFlutter] for the store contract.
 extension ConfigWireFlutterExtension on ConfigWire {
   /// One-shot Flutter init for this [ConfigWire].
   ///
@@ -400,11 +314,9 @@ extension ConfigWireFlutterExtension on ConfigWire {
   /// the cache load plus forced fetch.
   ///
   /// Never throws: device collection degrades per-field for the default
-  /// collector (identity-only for a throwing custom collector), install-ID
-  /// generation failures degrade to anonymous `''`, and
+  /// collector (customAttrs-only for a throwing custom collector), and
   /// [ConfigWire.ensureInitialized] never throws.
   Future<void> configureFlutter({
-    String Function() idGenerator = defaultIdGenerator,
     Map<String, Object?>? customAttrs,
     bool collectDevice = true,
     @Deprecated('Use store: with SharedPreferencesCacheStore instead')
@@ -416,7 +328,6 @@ extension ConfigWireFlutterExtension on ConfigWire {
     CacheStore? store,
   }) => ConfigWireFlutter._configureFlutter(
     this,
-    idGenerator: idGenerator,
     customAttrs: customAttrs,
     collectDevice: collectDevice,
     prefixCache: prefixCache,
@@ -431,8 +342,8 @@ extension ConfigWireFlutterExtension on ConfigWire {
 /// `'<prefixCache>.<Uri.encodeComponent(env)>.bucket'`
 /// (default prefix `'configwire'`, e.g. `'configwire.dev.bucket'`).
 ///
-/// Same namespacing scheme as [userIdKeyFor]; only the suffix differs
-/// (`bucket` vs `userId` vs the cache row's `cache`). Used solely for
+/// Same `<prefixCache>.<env>` namespacing as the cache row; only the suffix
+/// differs (`bucket` vs the cache row's `cache`). Used solely for
 /// non-prefs backing stores, whose cache rows are session-only — prefs
 /// backed stores carry the bucket in the row itself and never touch this
 /// key, so the two sources can never fork.
@@ -450,8 +361,7 @@ bool _isCanonicalBucket(Object? raw) => raw is int && raw >= 0 && raw <= 9999;
 ///
 /// A stored value parses only when it is a plain `0`-`9999` int string
 /// (`"007"`, whitespace-padded, floats, and out-of-range values count as
-/// absent). Blocked storage degrades to load-absent: never throws (parity
-/// with the `user_store` discipline).
+/// absent). Blocked storage degrades to load-absent: never throws.
 Future<int?> _loadPersistedBucket({
   required SharedPreferencesAsync prefs,
   required String env,
@@ -496,7 +406,7 @@ Future<void> _savePersistedBucket({
 }
 
 /// Removes the persisted fallback bucket. Swallows ALL errors so callers
-/// never observe a throw (parity with the `user_store` discipline).
+/// never observe a throw (same never-throws bucket discipline as above).
 Future<void> clearPersistedBucket({
   required SharedPreferencesAsync prefs,
   required String env,

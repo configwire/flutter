@@ -162,7 +162,6 @@ class TargetingView extends StatelessWidget {
     final style = Theme.of(context).textTheme.bodySmall
         ?.copyWith(fontFamily: 'monospace');
     final fields = <String, String>{
-      'userId': targeting.userId.isEmpty ? '(anonymous)' : targeting.userId,
       'platform': targeting.platform.isEmpty ? '—' : targeting.platform,
       'appVersion': targeting.appVersion.isEmpty ? '—' : targeting.appVersion,
       'locale': targeting.locale.isEmpty ? '—' : targeting.locale,

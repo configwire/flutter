@@ -7,8 +7,7 @@
 // cleared whatever backing store is attached. Row-wins precedence,
 // reinstall-wipes-row semantics, and per-env isolation are preserved:
 // clearing one env never touches another. Blocked storage degrades to a
-// memory-only clear and never throws (parity with the `user_store`
-// discipline).
+// memory-only clear and never throws.
 //
 // Hermetic by construction: `collectDevice: false` everywhere (no device
 // seams), `InMemorySharedPreferencesAsync` doubles, and `MockClient` for
@@ -117,7 +116,6 @@ void main() {
         // the cache-loaded bucket (offline-first, never throws).
         await cw.configureFlutter(
           collectDevice: false,
-          idGenerator: () => 'abc123def456ghi',
           ensureInitialized: true,
         );
         expect(cw.bucket, equals(42));
@@ -151,7 +149,6 @@ void main() {
         );
         await cw.configureFlutter(
           collectDevice: false,
-          idGenerator: () => 'abc123def456ghi',
           ensureInitialized: true,
         );
         expect(cw.bucket, equals(77));
@@ -185,10 +182,7 @@ void main() {
           baseUrl: 'http://127.0.0.1:8090',
           store: SharedPreferencesCacheStore(env: 'dev'),
         );
-        await cw.configureFlutter(
-          collectDevice: false,
-          idGenerator: () => 'abc123def456ghi',
-        );
+        await cw.configureFlutter(collectDevice: false);
 
         await ConfigWireFlutter.clearBucket(cw);
 
@@ -214,11 +208,7 @@ void main() {
         baseUrl: 'http://127.0.0.1:8090',
         store: _ThrowingStore(),
       );
-      await cw.configureFlutter(
-        prefs: _ThrowingPrefs(),
-        collectDevice: false,
-        idGenerator: () => 'abc123def456ghi',
-      );
+      await cw.configureFlutter(prefs: _ThrowingPrefs(), collectDevice: false);
 
       await expectLater(
         ConfigWireFlutter.clearBucket(cw, prefs: _ThrowingPrefs()),
@@ -245,10 +235,7 @@ void main() {
         store: MemoryCacheStore(),
         minimumFetchInterval: Duration.zero,
       );
-      await cw.configureFlutter(
-        collectDevice: false,
-        idGenerator: () => 'abc123def456ghi',
-      );
+      await cw.configureFlutter(collectDevice: false);
       expect(await cw.fetchAndActivate(), isTrue);
       expect(cw.bucket, equals(42));
 

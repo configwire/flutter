@@ -67,8 +67,11 @@ Future<void> main() async {
 
 ## Targeting
 
-> Bucket (`?b=0-9999`) is the primary identity and the only identity kept in `configwire server v0.2.0`.
-> Server-derived anonID plus `userId`/`country` emission are backward-compat shims only.
+> Bucket (`?b=0-9999`) is the sole identity since `configwire server v0.2.0-rc.1`
+> (released 2026-10-25, bucket-only). The SDK sends no `?userHash=`
+> and no body `userHash`; `Targeting.userId`, the install-ID
+> generation/persistence helpers, and the per-env install-ID prefs keys
+> are removed (not deprecated).
 
 Targeting attributes are sent as fetch query params so the server can
 evaluate `rules` per fetch. Collection is automatic
@@ -81,23 +84,27 @@ the param is omitted):
 
 | Field         | Query param              | Default value                                                                                                                   | Source                  |
 | ------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| `userId`      | `?userHash=` (deprecated, compat-only) | Stable install ID: a 15-char lowercase `[a-z0-9]` ID, generated once and persisted, emitted as `?userHash=<sha256hex16>` at fetch time. Customize the first-run value only via `idGenerator` (default `defaultIdGenerator`, built on `generateUserId`). Deprecated: the server ignores `userHash` for bucketing/exposure identity (accepted-but-ignored, `X-CW-Deprecated-userHash`); bucketing rides the stable `?b=` slot below | Persistence via the restored `user_store` helpers on the store-owned backend |
 | `platform`    | `?platform=`             | `android` \| `ios` \| `macos` \| `windows` \| `linux` \| `fuchsia` \| `web` (`kIsWeb` forces `web`)                             | `defaultTargetPlatform` |
 | `appVersion`  | `?appVersion=`           | Package version with `+build` metadata stripped for strict-semver compare (e.g. `1.0.0+1` → `1.0.0`); empty (omitted) when unreadable | `package_info_plus`     |
 | `locale`      | `?locale=`               | `toLanguageTag` (e.g. `en-US`); empty (omitted) when unreadable                                                               | `PlatformDispatcher.locale` |
 | `country`     | `?country=` (deprecated, ignored) | `countryCode` (e.g. `US`); empty (omitted) when absent or unreadable. Deprecated: the server derives country from request headers and ignores the client-sent value | `PlatformDispatcher.locale` |
 | `customAttrs` | `?attrs=` (compact JSON) | `{}` (omitted) unless passed via `cw.configureFlutter(customAttrs:)`                                                           | Caller input            |
 
-Identity is a random per-install value: only its SHA-256 hash (truncated to
-16 hex chars) ever leaves the device, and the server stores no raw identity.
-The hash emission stays for the compat window only and is removed in `configwire server v0.2.0` (bucket-only) — the server ignores it
-for bucketing and exposure identity, so experiment arms ride the primary stable
-`?b=` bucket: each evaluated `200` mints a `bucket` (`0`-`9999`)
+Removed: there is no `userId` targeting field and no install-ID
+generation or persistence. The install-ID helpers and the
+`<prefix>.<env>.userId` prefs key scheme are removed (not deprecated),
+so no install ID is generated, stored, or sent.
+
+Identity is the stable `?b=` bucket only: since
+`configwire server v0.2.0-rc.1` (released 2026-10-25, bucket-only) nothing
+is emitted as identity except `?b=`. Experiment arms ride the
+stable `?b=` bucket: each evaluated `200` mints a `bucket` (`0`-`9999`)
 that persists first-write-wins and is sent as `?b=` on fetch and events,
-surviving the server's daily anonID rotation.
-Non-prefs stores keep the 0.2.x stable ID via the prefs fallback (legacy
-`prefs:`/`prefixCache:` persistence), so no install goes anonymous while
-prefs are writable. The bucket gets the same fallback discipline:
+surviving the server's daily anonID rotation. The server ignores
+identity inputs without rejecting them (event-body `userId` in any
+casing is ignored, never stored or logged) and never rejects an empty
+or missing `?b=`.
+The bucket gets prefs-fallback discipline:
 prefs-backed stores carry it in the namespaced cache row, while
 session-only stores (e.g. `MemoryCacheStore`) mirror it through prefs
 under `<prefix>.<env>.bucket` and merge it back into bucket-less rows —
@@ -108,19 +115,20 @@ re-persists the row with `bucket: null`, and removes the prefs fallback
 key, so the next fetch sends no `?b=`.
 
 Bare `ConfigWire(...)` plus `configureFlutter()` gets disk persistence
-and a stable install ID via an auto-attached
+via an auto-attached
 `SharedPreferencesCacheStore(env: cw.env)` honoring legacy
 `prefs:`/`prefixCache:`. Store precedence: explicit
 `store:` param > explicit ctor store > auto-attached
-`SharedPreferencesCacheStore(env: cw.env)`.
+`SharedPreferencesCacheStore(env: cw.env)`. Identity is the stable
+`?b=` bucket, not an install ID.
 
 ## Migrating from 0.2.x
 
 No migration needed — 0.2.x calls compile and behave as before:
 `ConfigWireFlutter.createConfigWire(...)` and
 `configureFlutter(prefs: ..., prefixCache: ...)` keep working
-(deprecated shims), and `<prefix>.<env>.userId` keys are adopted as-is,
-so existing installs keep their buckets with no reshuffle. The preferred
+(deprecated shims), so existing installs keep their buckets with no
+reshuffle. The preferred
 shape going forward is bring-your-own (optional):
 
 **1. One-shot factory → bring-your-own (optional):**
@@ -146,16 +154,16 @@ await cw.ensureInitialized();
 call `ensureInitialized` explicitly.)
 
 **2. `prefs:` / `prefixCache:` (optional)** — these still work and still
-govern the install-ID key verbatim. New code should prefer the store
+govern the namespaced cache/bucket keys verbatim. New code should prefer the store
 (`SharedPreferencesCacheStore(env:…, prefixCache:…)`) with the `store:`
 param instead; an explicit legacy `prefs:` or non-default `prefixCache:`
-continues to win for the ID key.
+continues to win for those keys.
 
-**3. `user_store` is back** — `loadPersistedUserId`,
-`savePersistedUserId`, `clearPersistedUserId`, `userIdKeyFor`,
-`defaultIdGenerator`, and `generateUserId` return with the same 0.2.x
-names (deprecations lifted). The store exposes its backend via a `prefs`
-getter so the helpers can run on the store-owned backend.
+**3. Install-ID removal (breaking)** — the install-ID targeting field,
+its generation/persistence helpers, and the per-env install-ID prefs
+keys are removed (not deprecated). Drop any custom install-ID wiring
+and rely on the stable `?b=` bucket; `?b=` bucket persistence is
+unchanged.
 
 ## License
 

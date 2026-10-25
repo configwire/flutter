@@ -51,12 +51,13 @@ class _PackageInfoVersionReader implements AppVersionReader {
 ///   anywhere, so the Web build compiles.
 /// * `appVersion` strips `+build` metadata for strict-semver compare.
 /// * Locale via [Locale.toLanguageTag]; country from `countryCode`.
-/// * [userId] and [customAttrs] pass through untouched (a defensive copy
+/// * Targeting is always anonymous: the former install-ID surface has been
+///   removed, so nothing identity-like enters the URL — bucketing rides
+///   the stable `?b=` slot.
+/// * [customAttrs] pass through untouched (a defensive copy
 ///   for the map); no device keys are ever added to `customAttrs`.
-///   `[userId]` emits as `?userHash=<sha256hex16>` at fetch time
-///   (`Targeting.toQueryParameters`); raw identity never enters the URL.
 /// * Never throws: each seam failure degrades its field; the outer
-///   try/catch returns the [userId]-only targeting as a last resort.
+///   try/catch returns customAttrs-only targeting as a last resort.
 ///   Platform is param-derived (not plugin-derived), so it always
 ///   survives seam failures — only the plugin-derived fields
 ///   (appVersion/locale/country) degrade to empty.
@@ -81,8 +82,12 @@ class DeviceTargetingCollector {
     return platform.name.toLowerCase();
   }
 
+  /// Resolves device-derived [Targeting] for fetch query params.
+  ///
+  /// Targeting is always anonymous: the former install-ID surface has been
+  /// removed, so nothing passed here reaches the wire as identity —
+  /// bucketing rides the stable `?b=` slot.
   Future<Targeting> resolveDeviceTargeting(
-    String userId,
     Map<String, Object?> customAttrs,
   ) async {
     try {
@@ -113,7 +118,6 @@ class DeviceTargetingCollector {
       }
 
       return Targeting(
-        userId: userId,
         platform: autoPlatform,
         appVersion: autoVersion,
         locale: autoLocale,
@@ -121,13 +125,11 @@ class DeviceTargetingCollector {
         customAttrs: Map<String, Object?>.of(customAttrs),
       );
     } catch (_) {
-      // Last resort: never throw. Keep the caller-supplied identity even
-      // when device collection itself somehow failed.
+      // Last resort: never throw. Device collection itself somehow
+      // failed, so return customAttrs-only targeting (anonymous — no
+      // identity is fed toward the wire).
       try {
-        return Targeting(
-          userId: userId,
-          customAttrs: Map<String, Object?>.of(customAttrs),
-        );
+        return Targeting(customAttrs: Map<String, Object?>.of(customAttrs));
       } catch (_) {
         return const Targeting();
       }

@@ -19,8 +19,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 ///
 /// Reinstall semantics: reinstalling (or clearing app storage) wipes this
 /// row with everything else, so the next launch loads bucket-absent and
-/// the next cold `200` mints a NEW bucket (expected re-roll; the install
-/// ID in `'<prefixCache>.<env>.userId'` is wiped the same way).
+/// the next cold `200` mints a NEW bucket (expected re-roll).
 ///
 /// Divergence from [CacheStore.save]'s may-throw permission: this store
 /// swallows ALL save errors (blocked storage, denied quota, corrupt
@@ -44,7 +43,7 @@ class SharedPreferencesCacheStore implements CacheStore {
   /// Key prefix of [_key].
   final String prefixCache;
 
-  /// Exposes the store-owned backend so the restored user_store helpers run on it.
+  /// Exposes the store-owned backend so bucket helpers run on it.
   SharedPreferencesAsync get prefs => _prefs;
 
   @override

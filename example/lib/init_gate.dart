@@ -60,10 +60,9 @@ class _ConfigWireInitGateState extends State<ConfigWireInitGate> {
         verbose: true, // prints debug lines to the console
       );
       await cw.configureFlutter(
-        // collectDevice: true  — auto-fills platform, appVersion, locale, country.
-        // Default prefs store attached here; stable install ID
-        // auto-generated + persisted by it; override the first-run value
-        // with idGenerator if needed.
+        // collectDevice: true — auto-fills platform, appVersion, locale,
+        // country. Targeting stays anonymous; bucketing rides the
+        // stable `?b=` slot.
       );
       // Cache load + force-fetch; never throws (falls back to cache/defaults).
       await cw.ensureInitialized();

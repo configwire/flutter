@@ -12,15 +12,14 @@
 //       prefs-backed stores. Reinstall (fresh prefs) loads bucket-absent,
 //       so the next cold 200 mints a new bucket.
 //   (b) Non-prefs backing stores (e.g. `MemoryCacheStore`, session-only by
-//       design) follow the same fallback discipline as install IDs: the
-//       bucket is mirrored to prefs under `<prefix>.<env>.bucket`
-//       (mirroring `userIdKeyFor`) and merged back into bucket-less rows,
+//       design) mirror the bucket to prefs under `<prefix>.<env>.bucket`
+//       and merge it back into bucket-less rows,
 //       so the persisted bucket still reaches the T5 fetch wire instead of
 //       being dropped. Blocked storage degrades to load-absent/save-noop
-//       and never throws (parity with the `user_store` discipline).
-//   (c) Frozen behavior: `userId` still emits `?userHash=<sha256hex16>`
-//       exactly as before, and the persisted bucket reaches the client
-//       (`cw.bucket`, T5's `?b=` input) via the attached store.
+//       and never throws.
+//   (c) Removed emission: no `userHash` reaches the wire, and the persisted
+//       bucket still reaches the client (`cw.bucket`, T5's `?b=` input) via
+//       the attached store.
 //
 // Hermetic by construction: `collectDevice: false` everywhere (no device
 // seams) and no live server — `ensureInitialized: true` against
@@ -213,14 +212,11 @@ void main() {
         final prefs = SharedPreferencesAsync();
         await prefs.setString('configwire.dev.bucket', '42');
         final cw = memoryClient();
-        await cw.configureFlutter(
-          collectDevice: false,
-          idGenerator: () => 'abc123def456ghi',
-        );
+        await cw.configureFlutter(collectDevice: false);
         final row = await cw.store.load();
         expect(row, isNotNull);
         expect(row!.bucket, equals(42));
-        // The fallback key follows the userIdKeyFor namespacing scheme.
+        // The fallback key follows the cache-row namespacing scheme.
         expect(await prefs.getString('configwire.dev.bucket'), equals('42'));
         await cw.dispose();
       },
@@ -230,10 +226,7 @@ void main() {
       final prefs = SharedPreferencesAsync();
       await prefs.setString('configwire.dev.bucket', '7');
       final cw = memoryClient();
-      await cw.configureFlutter(
-        collectDevice: false,
-        idGenerator: () => 'abc123def456ghi',
-      );
+      await cw.configureFlutter(collectDevice: false);
       // A fresher row (e.g. a just-completed fetch) outranks the fallback.
       await cw.store.save(bucketFixture(bucket: 42));
       final row = await cw.store.load();
@@ -246,10 +239,7 @@ void main() {
     test('malformed fallback bucket is ignored, never throws', () async {
       final prefs = SharedPreferencesAsync();
       final cw = memoryClient();
-      await cw.configureFlutter(
-        collectDevice: false,
-        idGenerator: () => 'abc123def456ghi',
-      );
+      await cw.configureFlutter(collectDevice: false);
       for (final bad in ['abc', '007', '10000', '-1', ' 12 ', '']) {
         await prefs.setString('configwire.dev.bucket', bad);
         final row = await cw.store.load();
@@ -270,14 +260,13 @@ void main() {
           store: MemoryCacheStore(),
         );
         // Blocked storage must not break configure even though the bucket
-        // fallback backend throws on every call: the install still gets a
-        // session identity and an (empty) session row, with no bucket.
+        // fallback backend throws on every call: targeting stays anonymous
+        // with no bucket, and configure still succeeds.
         await cw.configureFlutter(
           prefs: _ThrowingPrefs(),
           collectDevice: false,
-          idGenerator: () => 'abc123def456ghi',
         );
-        expect(cw.targeting.userId, equals('abc123def456ghi'));
+        expect(cw.targeting.toQueryParameters(), isNot(contains('userHash')));
         final row = await cw.store.load();
         expect(row?.bucket, isNull);
         await cw.dispose();
@@ -294,7 +283,6 @@ void main() {
           prefs: prefs,
           prefixCache: 'custom',
           collectDevice: false,
-          idGenerator: () => 'abc123def456ghi',
         );
         expect((await cw.store.load())!.bucket, equals(9));
         // Custom prefix isolates: the default key stays empty.
@@ -304,8 +292,8 @@ void main() {
     );
   });
 
-  group('frozen emission + wrapper-to-wire bucket handoff', () {
-    test('userId still emits ?userHash= with a bucket persisted', () async {
+  group('removed emission + wrapper-to-wire bucket handoff', () {
+    test('no userHash on the wire with a bucket persisted', () async {
       final prefs = SharedPreferencesAsync();
       await SharedPreferencesCacheStore(
         prefs: prefs,
@@ -317,16 +305,13 @@ void main() {
         baseUrl: 'http://127.0.0.1:8090',
         store: SharedPreferencesCacheStore(env: 'dev'),
       );
-      await cw.configureFlutter(
-        collectDevice: false,
-        idGenerator: () => 'user-9',
-      );
-      // Frozen: userId -> ?userHash=<sha256hex16>, never raw ?uid=.
-      // The ?b= send itself is T5's fetch-wire merge (dart/) reading the
-      // persisted row; the server applies ?b= > ?userHash= precedence.
+      await cw.configureFlutter(collectDevice: false);
+      // Removed: no raw `?uid=`, no `?userHash=`. The `?b=` send itself is
+      // T5's fetch-wire merge (dart/) reading the persisted row; the server
+      // treats `?b=` as the sole identity.
       final q = cw.targeting.toQueryParameters();
       expect(q.containsKey('uid'), isFalse);
-      expect(q['userHash'], equals(sha256Hex16('user-9')));
+      expect(q, isNot(contains('userHash')));
       await cw.dispose();
     });
 
@@ -348,7 +333,6 @@ void main() {
         // keeps the cache-loaded bucket (offline-first, never throws).
         await cw.configureFlutter(
           collectDevice: false,
-          idGenerator: () => 'abc123def456ghi',
           ensureInitialized: true,
         );
         expect(cw.bucket, equals(42));
@@ -360,11 +344,7 @@ void main() {
     test('memory store + seeded fallback reaches cw.bucket on init', () async {
       await SharedPreferencesAsync().setString('configwire.dev.bucket', '77');
       final cw = memoryClient();
-      await cw.configureFlutter(
-        collectDevice: false,
-        idGenerator: () => 'abc123def456ghi',
-        ensureInitialized: true,
-      );
+      await cw.configureFlutter(collectDevice: false, ensureInitialized: true);
       expect(cw.bucket, equals(77));
       await cw.dispose();
     });

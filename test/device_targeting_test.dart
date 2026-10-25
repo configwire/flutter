@@ -6,8 +6,11 @@
 // Contract under test (from `client/dart/lib/src/targeting.dart` and
 // `lib/src/device_targeting.dart`):
 // * Injectable `DeviceTargetingCollector({dispatcher?, packageInfo?})` +
-//   `resolveDeviceTargeting(userId, customAttrs)` returning `Targeting`.
-// * Passthrough: `userId` and `customAttrs` are used untouched (a defensive
+//   `resolveDeviceTargeting(customAttrs)` returning `Targeting`.
+// * Targeting is always anonymous: the former install-ID surface has been
+//   removed — the returned targeting carries no identity and the query
+//   never contains `userHash`. Bucketing rides the stable `?b=` slot.
+// * Passthrough: `customAttrs` are used untouched (a defensive
 //   copy for the map); no device keys are ever added to `customAttrs`.
 // * Normalization: platform in {android, ios, web, macos, windows, linux}
 //   from `defaultTargetPlatform` with a `kIsWeb` guard (no `dart:io` on the
@@ -15,9 +18,9 @@
 //   country from `locale.countryCode`, empty unless present.
 // * Never-throws rule (single rule for this suite): platform is
 //   param-derived, NOT plugin-derived, so it ALWAYS survives seam
-//   failures. When every seam throws, the result is platform + the
-//   caller-supplied `userId`/`customAttrs` (version/locale/country empty)
-//   — never a throw.
+//   failures. When every seam throws, the result is platform +
+//   the caller-supplied `customAttrs` (version/locale/country empty,
+//   anonymous — no identity emission) — never a throw.
 // * No extra keys: no collector output key exists beyond
 //   platform/appVersion/locale/country; `customAttrs` comes from the
 //   caller input alone.
@@ -100,7 +103,7 @@ void main() {
         for (final entry in expected.entries) {
           final targeting = await collector(
             platform: entry.key,
-          ).resolveDeviceTargeting('', {});
+          ).resolveDeviceTargeting({});
           expect(
             targeting.platform,
             entry.value,
@@ -115,7 +118,7 @@ void main() {
         final targeting = await collector(
           platform: platform,
           isWeb: true,
-        ).resolveDeviceTargeting('', {});
+        ).resolveDeviceTargeting({});
         expect(
           targeting.platform,
           'web',
@@ -127,7 +130,7 @@ void main() {
     test('fuchsia is covered and sent as a platform value', () async {
       final targeting = await collector(
         platform: TargetPlatform.fuchsia,
-      ).resolveDeviceTargeting('', {});
+      ).resolveDeviceTargeting({});
       expect(targeting.platform, 'fuchsia');
       expect(targeting.toQueryParameters()['platform'], 'fuchsia');
     });
@@ -137,28 +140,28 @@ void main() {
     test('strips +build metadata (1.0.0+1 -> 1.0.0)', () async {
       final targeting = await collector(
         packageInfo: FakePackageInfo('1.0.0+1'),
-      ).resolveDeviceTargeting('', {});
+      ).resolveDeviceTargeting({});
       expect(targeting.appVersion, '1.0.0');
     });
 
     test('strips dotted build metadata (2.3.4+build.5 -> 2.3.4)', () async {
       final targeting = await collector(
         packageInfo: FakePackageInfo('2.3.4+build.5'),
-      ).resolveDeviceTargeting('', {});
+      ).resolveDeviceTargeting({});
       expect(targeting.appVersion, '2.3.4');
     });
 
     test('leaves a bare semver version untouched', () async {
       final targeting = await collector(
         packageInfo: FakePackageInfo('1.2.3'),
-      ).resolveDeviceTargeting('', {});
+      ).resolveDeviceTargeting({});
       expect(targeting.appVersion, '1.2.3');
     });
 
     test('server can strict-semver-compare the normalized version', () async {
       final targeting = await collector(
         packageInfo: FakePackageInfo('1.0.0+1'),
-      ).resolveDeviceTargeting('', {});
+      ).resolveDeviceTargeting({});
       // Must be parseable MAJOR.MINOR.PATCH: no '+' may survive.
       expect(targeting.appVersion, isNot(contains('+')));
       expect(targeting.toQueryParameters()['appVersion'], '1.0.0');
@@ -169,31 +172,30 @@ void main() {
     test('locale uses toLanguageTag (en_US -> en-US)', () async {
       final targeting = await collector(
         dispatcher: FakeDispatcher(const Locale('en', 'US')),
-      ).resolveDeviceTargeting('', {});
+      ).resolveDeviceTargeting({});
       expect(targeting.locale, 'en-US');
     });
 
     test('country comes from locale.countryCode', () async {
       final targeting = await collector(
         dispatcher: FakeDispatcher(const Locale('en', 'US')),
-      ).resolveDeviceTargeting('', {});
+      ).resolveDeviceTargeting({});
       expect(targeting.country, 'US');
     });
 
     test('locale without a country leaves country empty', () async {
       final targeting = await collector(
         dispatcher: FakeDispatcher(const Locale('fr')),
-      ).resolveDeviceTargeting('', {});
+      ).resolveDeviceTargeting({});
       expect(targeting.locale, 'fr');
       expect(targeting.country, isEmpty);
       expect(targeting.toQueryParameters(), isNot(contains('country')));
     });
   });
 
-  group('userId + customAttrs passthrough', () {
+  group('anonymous identity + customAttrs passthrough', () {
     test('empty inputs yield empty identity fields', () async {
-      final targeting = await collector().resolveDeviceTargeting('', {});
-      expect(targeting.userId, isEmpty);
+      final targeting = await collector().resolveDeviceTargeting({});
       expect(targeting.customAttrs, isEmpty);
       expect(
         targeting.toQueryParameters(),
@@ -201,18 +203,33 @@ void main() {
       );
     });
 
-    test('userId passes through untouched', () async {
-      final targeting = await collector().resolveDeviceTargeting('user-7', {});
-      expect(targeting.userId, 'user-7');
+    test('no identity is ever fed toward emission', () async {
+      final targeting = await collector().resolveDeviceTargeting({});
       final q = targeting.toQueryParameters();
       expect(q.containsKey('uid'), isFalse);
-      expect(q['userHash'], equals(sha256Hex16('user-7')));
-      expect(q['userHash'], hasLength(16));
-      expect(q['userHash'], matches(RegExp(r'^[0-9a-f]{16}$')));
+      expect(q, isNot(contains('userHash')));
+    });
+
+    test('no userHash on the wire, customAttrs intact', () async {
+      // Guard: no identity reaches the wire — bucketing rides the
+      // stable `?b=` slot.
+      for (final attrs in [
+        {'plan': 'pro'},
+        <String, Object?>{},
+      ]) {
+        final targeting = await collector().resolveDeviceTargeting(attrs);
+        final q = targeting.toQueryParameters();
+        expect(q.containsKey('uid'), isFalse);
+        expect(q, isNot(contains('userHash')));
+      }
+      final withAttrs = await collector().resolveDeviceTargeting({
+        'plan': 'pro',
+      });
+      expect(withAttrs.toQueryParameters()['attrs'], contains('pro'));
     });
 
     test('customAttrs survive untouched', () async {
-      final targeting = await collector().resolveDeviceTargeting('', {
+      final targeting = await collector().resolveDeviceTargeting({
         'plan': 'pro',
       });
       // Exact equality: no auto keys may be added.
@@ -222,30 +239,27 @@ void main() {
     test('customAttrs are copied, never enriched', () async {
       final targeting = await collector(
         platform: TargetPlatform.iOS,
-      ).resolveDeviceTargeting('', {'plan': 'pro', 'seats': 5});
+      ).resolveDeviceTargeting({'plan': 'pro', 'seats': 5});
       expect(targeting.customAttrs, {'plan': 'pro', 'seats': 5});
       expect(targeting.toQueryParameters()['attrs'], contains('pro'));
     });
 
-    test('identity rides alongside auto-collected device fields', () async {
-      final targeting = await collector().resolveDeviceTargeting('user-7', {
+    test('device fields collect while identity stays off the wire', () async {
+      final targeting = await collector().resolveDeviceTargeting({
         'plan': 'pro',
       });
-      expect(targeting.userId, 'user-7');
       expect(targeting.customAttrs, {'plan': 'pro'});
       expect(targeting.platform, 'android');
       expect(targeting.appVersion, '1.0.0');
       expect(targeting.locale, 'en-US');
       expect(targeting.country, 'US');
-      // Hashed identity: raw id never enters the URL, stickiness comes
-      // from the stable hash of the same id.
+      // Removed emission: no raw `uid`, no `userHash` — stickiness now
+      // comes from the stable `?b=` bucket, not identity.
       final q = targeting.toQueryParameters();
       expect(q.containsKey('uid'), isFalse);
-      expect(q['userHash'], equals(sha256Hex16('user-7')));
-      final again = await collector().resolveDeviceTargeting('user-7', {
-        'plan': 'pro',
-      });
-      expect(again.toQueryParameters()['userHash'], equals(q['userHash']));
+      expect(q, isNot(contains('userHash')));
+      final again = await collector().resolveDeviceTargeting({'plan': 'pro'});
+      expect(again.toQueryParameters(), equals(q));
     });
   });
 
@@ -255,28 +269,23 @@ void main() {
         packageInfo: ThrowingPackageInfo(),
         dispatcher: ThrowingDispatcher(),
       );
-      await expectLater(
-        c.resolveDeviceTargeting('user-7', {'plan': 'pro'}),
-        completes,
-      );
-      final targeting = await c.resolveDeviceTargeting('user-7', {
-        'plan': 'pro',
-      });
+      await expectLater(c.resolveDeviceTargeting({'plan': 'pro'}), completes);
+      final targeting = await c.resolveDeviceTargeting({'plan': 'pro'});
       // Platform is param-derived, so it survives; every plugin-derived
-      // field degrades to empty while the caller identity is preserved.
-      expect(targeting.userId, 'user-7');
+      // field degrades to empty, identity stays off the wire, and the
+      // caller customAttrs are preserved.
       expect(targeting.platform, 'android');
       expect(targeting.appVersion, isEmpty);
       expect(targeting.locale, isEmpty);
       expect(targeting.country, isEmpty);
       expect(targeting.customAttrs, {'plan': 'pro'});
+      expect(targeting.toQueryParameters(), isNot(contains('userHash')));
     });
 
     test('package-info failure alone keeps platform/locale/country', () async {
       final targeting = await collector(
         packageInfo: ThrowingPackageInfo(),
-      ).resolveDeviceTargeting('user-7', {});
-      expect(targeting.userId, 'user-7');
+      ).resolveDeviceTargeting({});
       expect(targeting.platform, 'android');
       expect(targeting.appVersion, isEmpty);
       expect(targeting.locale, 'en-US');
@@ -287,8 +296,7 @@ void main() {
     test('dispatcher failure alone keeps platform/version', () async {
       final targeting = await collector(
         dispatcher: ThrowingDispatcher(),
-      ).resolveDeviceTargeting('user-7', {});
-      expect(targeting.userId, 'user-7');
+      ).resolveDeviceTargeting({});
       expect(targeting.platform, 'android');
       expect(targeting.appVersion, '1.0.0');
       expect(targeting.locale, isEmpty);
