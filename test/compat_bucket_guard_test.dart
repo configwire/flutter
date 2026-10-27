@@ -7,15 +7,21 @@
 // Already pinned elsewhere (referenced, not duplicated):
 //   - (a)-(d) shim shapes + default/custom-key persistence:
 //     backward_compat_test.dart
-//   - bucket row round-trip / per-env isolation / reinstall-absent /
-//     malformed-absent / fallback merge / no-`userHash` emission rule:
-//     bucket_persistence_test.dart
+//   - bucket row round-trip / per-key isolation / reinstall-absent /
+//     malformed-absent / fallback merge / no-`userHash` emission rule /
+//     legacy-row migration: bucket_persistence_test.dart
 // ignore_for_file: deprecated_member_use
 import 'package:configwire_flutter/configwire_flutter.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
+
+/// Realistic SDK-key fixture (`'cw-'` + 24 base62).
+const kApiKeyA = 'cw-0123456789ABCDEFGHJKLMNP';
+
+/// First-8 prefix of the fixture above.
+const kPrefixA = 'cw-01234';
 
 void main() {
   setUp(() {
@@ -26,10 +32,10 @@ void main() {
   group('compat: shims coexist with a persisted bucket', () {
     test('createConfigWire stays anonymous beside a bucket fallback', () async {
       final prefs = SharedPreferencesAsync();
-      await prefs.setString('configwire.dev.bucket', '42');
+      await prefs.setString('configwire.$kPrefixA.bucket', '42');
 
       final cw = await ConfigWireFlutter.createConfigWire(
-        apiKey: 'sk-test',
+        apiKey: kApiKeyA,
         env: 'dev',
         baseUrl: 'http://127.0.0.1:8090',
         collectDevice: false,
@@ -45,9 +51,9 @@ void main() {
       'configureFlutter(prefs:, prefixCache:) keeps the bucket fallback',
       () async {
         final prefs = SharedPreferencesAsync();
-        await prefs.setString('custom.dev.bucket', '77');
+        await prefs.setString('custom.$kPrefixA.bucket', '77');
         final cw = ConfigWire(
-          apiKey: 'sk-test',
+          apiKey: kApiKeyA,
           env: 'dev',
           baseUrl: 'http://127.0.0.1:8090',
           store: MemoryCacheStore(),

@@ -3,15 +3,18 @@
 // `ConfigWireFlutter.clearBucket(cw)` mirrors Dart's `clearBucket` (nulls
 // the in-memory bucket, re-persists the row with `bucket: null`, next
 // fetch sends no `?b=`) and additionally clears the prefs fallback key
-// `<prefix>.<env>.bucket` via `clearPersistedBucket`, so both keys are
-// cleared whatever backing store is attached. Row-wins precedence,
-// reinstall-wipes-row semantics, and per-env isolation are preserved:
-// clearing one env never touches another. Blocked storage degrades to a
-// memory-only clear and never throws.
+// `<prefix>.<namespace>.bucket` via `clearPersistedBucket`, so both keys
+// are cleared whatever backing store is attached. Row-wins precedence,
+// reinstall-wipes-row semantics, and per-key isolation are preserved:
+// clearing one key prefix never touches another. Blocked storage degrades
+// to a memory-only clear and never throws.
 //
 // Hermetic by construction: `collectDevice: false` everywhere (no device
 // seams), `InMemorySharedPreferencesAsync` doubles, and `MockClient` for
 // the wire assertion — no live server.
+// ignore_for_file: deprecated_member_use
+// (the deprecated `env` ctor arg is passed deliberately: it still feeds
+// the legacy-row migration path under test.)
 import 'dart:convert';
 
 import 'package:configwire_flutter/configwire_flutter.dart';
@@ -21,6 +24,14 @@ import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
+
+/// Realistic SDK-key fixtures (`'cw-'` + 24 base62).
+const kApiKeyA = 'cw-0123456789ABCDEFGHJKLMNP';
+const kApiKeyB = 'cw-QRSTUVWXYZabcdefghijklmn';
+
+/// First-8 prefixes of the fixtures above.
+const kPrefixA = 'cw-01234';
+const kPrefixB = 'cw-QRSTU';
 
 String fetch200Bucket({String etag = 'e1', int? bucket}) {
   final m = <String, Object?>{
@@ -74,22 +85,22 @@ void main() {
   });
 
   group('clearPersistedBucket helper', () {
-    test('removes the fallback key, per-env isolated', () async {
+    test('removes the fallback key, per-key isolated', () async {
       final prefs = SharedPreferencesAsync();
-      await prefs.setString('configwire.dev.bucket', '42');
-      await prefs.setString('configwire.prod.bucket', '7');
+      await prefs.setString('configwire.$kPrefixA.bucket', '42');
+      await prefs.setString('configwire.$kPrefixB.bucket', '7');
 
-      await clearPersistedBucket(prefs: prefs, env: 'dev');
+      await clearPersistedBucket(prefs: prefs, apiKey: kApiKeyA);
 
-      expect(await prefs.getString('configwire.dev.bucket'), isNull);
-      expect(await prefs.getString('configwire.prod.bucket'), equals('7'));
+      expect(await prefs.getString('configwire.$kPrefixA.bucket'), isNull);
+      expect(await prefs.getString('configwire.$kPrefixB.bucket'), equals('7'));
     });
 
     test('never throws on blocked storage', () async {
       SharedPreferencesAsyncPlatform.instance =
           InMemorySharedPreferencesAsync.empty();
       await expectLater(
-        clearPersistedBucket(prefs: _ThrowingPrefs(), env: 'dev'),
+        clearPersistedBucket(prefs: _ThrowingPrefs(), apiKey: kApiKeyA),
         completes,
       );
     });
@@ -102,15 +113,15 @@ void main() {
         final prefs = SharedPreferencesAsync();
         await SharedPreferencesCacheStore(
           prefs: prefs,
-          env: 'dev',
+          apiKey: kApiKeyA,
         ).save(bucketRow(bucket: 42));
         // Stray fallback from an earlier non-prefs configuration must go too.
-        await prefs.setString('configwire.dev.bucket', '42');
+        await prefs.setString('configwire.$kPrefixA.bucket', '42');
         final cw = ConfigWire(
-          apiKey: 'sk-test',
+          apiKey: kApiKeyA,
           env: 'dev',
           baseUrl: 'http://127.0.0.1:8090',
-          store: SharedPreferencesCacheStore(env: 'dev'),
+          store: SharedPreferencesCacheStore(apiKey: kApiKeyA),
         );
         // No server is listening: the forced fetch fails gracefully and keeps
         // the cache-loaded bucket (offline-first, never throws).
@@ -125,13 +136,13 @@ void main() {
         expect(cw.bucket, isNull);
         final row = await SharedPreferencesCacheStore(
           prefs: prefs,
-          env: 'dev',
+          apiKey: kApiKeyA,
         ).load();
         expect(row, isNotNull);
         expect(row!.bucket, isNull);
         // Values/etag survive the clear; only the bucket slot is nulled.
         expect(row.etag, equals('e1'));
-        expect(await prefs.getString('configwire.dev.bucket'), isNull);
+        expect(await prefs.getString('configwire.$kPrefixA.bucket'), isNull);
         await cw.dispose();
       },
     );
@@ -140,9 +151,9 @@ void main() {
       'memory store: clears in-memory bucket and the fallback key',
       () async {
         final prefs = SharedPreferencesAsync();
-        await prefs.setString('configwire.dev.bucket', '77');
+        await prefs.setString('configwire.$kPrefixA.bucket', '77');
         final cw = ConfigWire(
-          apiKey: 'sk-test',
+          apiKey: kApiKeyA,
           env: 'dev',
           baseUrl: 'http://127.0.0.1:8090',
           store: MemoryCacheStore(),
@@ -157,30 +168,30 @@ void main() {
 
         expect(cw.bucket, isNull);
         expect((await cw.store.load())?.bucket, isNull);
-        expect(await prefs.getString('configwire.dev.bucket'), isNull);
+        expect(await prefs.getString('configwire.$kPrefixA.bucket'), isNull);
         await cw.dispose();
       },
     );
 
     test(
-      'per-env isolation: clearing dev leaves prod row + fallback intact',
+      'per-key isolation: clearing key A leaves key B row + fallback intact',
       () async {
         final prefs = SharedPreferencesAsync();
         await SharedPreferencesCacheStore(
           prefs: prefs,
-          env: 'dev',
+          apiKey: kApiKeyA,
         ).save(bucketRow(bucket: 42));
         await SharedPreferencesCacheStore(
           prefs: prefs,
-          env: 'prod',
+          apiKey: kApiKeyB,
         ).save(bucketRow(bucket: 7));
-        await prefs.setString('configwire.dev.bucket', '42');
-        await prefs.setString('configwire.prod.bucket', '7');
+        await prefs.setString('configwire.$kPrefixA.bucket', '42');
+        await prefs.setString('configwire.$kPrefixB.bucket', '7');
         final cw = ConfigWire(
-          apiKey: 'sk-test',
+          apiKey: kApiKeyA,
           env: 'dev',
           baseUrl: 'http://127.0.0.1:8090',
-          store: SharedPreferencesCacheStore(env: 'dev'),
+          store: SharedPreferencesCacheStore(apiKey: kApiKeyA),
         );
         await cw.configureFlutter(collectDevice: false);
 
@@ -190,11 +201,14 @@ void main() {
         expect(
           (await SharedPreferencesCacheStore(
             prefs: prefs,
-            env: 'prod',
+            apiKey: kApiKeyB,
           ).load())!.bucket,
           equals(7),
         );
-        expect(await prefs.getString('configwire.prod.bucket'), equals('7'));
+        expect(
+          await prefs.getString('configwire.$kPrefixB.bucket'),
+          equals('7'),
+        );
         await cw.dispose();
       },
     );
@@ -203,7 +217,7 @@ void main() {
       SharedPreferencesAsyncPlatform.instance =
           InMemorySharedPreferencesAsync.empty();
       final cw = ConfigWire(
-        apiKey: 'sk-test',
+        apiKey: kApiKeyA,
         env: 'dev',
         baseUrl: 'http://127.0.0.1:8090',
         store: _ThrowingStore(),
@@ -228,7 +242,7 @@ void main() {
         return http.Response(fetch200Bucket(bucket: 42), 200);
       });
       final cw = ConfigWire(
-        apiKey: 'sk-test',
+        apiKey: kApiKeyA,
         env: 'dev',
         baseUrl: 'http://127.0.0.1:8090',
         client: mock,

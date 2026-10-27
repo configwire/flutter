@@ -1,3 +1,34 @@
+## Unreleased
+
+* Compat: `SharedPreferencesCacheStore` is dual-namespaced — construct it
+  with `apiKey:` (namespaced by its `keyPrefixOf` prefix,
+   `<prefixCache>.<namespace>.cache`/`.bucket`) or with the legacy `env:`
+  (namespaced by the env string verbatim, byte-identical keys to before);
+  at least one of `apiKey`/`env` is required, and `apiKey` wins when both
+  are given. The `env` parameter and field are functional again (not
+  deprecated): old code compiles and behaves identically. The `keyPrefixOf`
+  helper (mirrors the server's `KeyPrefix` exactly) stays; only the
+  namespace segment appears in prefs key names — the full key is never
+  persisted or logged. `clearPersistedBucket` takes
+  `{prefs, apiKey, env, prefixCache}` under the same dual rule.
+  Upgrading installs keep their buckets with no reshuffle: the
+   `configureFlutter` auto-attach path (now constructed with both `apiKey`
+   and `env`) and the deprecated `createConfigWire` factory (same move,
+   run explicitly — the factory previously cold-started upgrades on a new
+   bucket mint) perform a one-time move of legacy
+   `<prefix>.<env>.cache`/`.bucket` rows to the prefix-namespaced keys
+   (new key absent + legacy row present → copy then remove,
+   best-effort/swallowed). Manually-constructed stores never migrate: same
+   key shares the row, a key with no prior row starts cold, and a
+   cross-namespace upgrade without both known starts cold (documented).
+   Two different SDK keys isolate; the same key shares. Prefix length is
+   unchanged (server parity): distinct keys sharing a first-8 prefix
+   share rows/bucket, so    rotation reusing a prefix reuses the bucket.
+* `ConfigWireFlutter.createConfigWire` takes an optional nullable `env:`
+  (defaults to null): null builds an alias-only client (key-only SDK
+  paths, needs a dual-serve server) with no legacy migration; passing
+  `env` keeps the legacy paths (old and new servers).
+
 ## 0.3.0-rc.1
 
 * **Breaking:** install-ID removal for `configwire server v0.2.0-rc.1`

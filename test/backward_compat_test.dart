@@ -16,19 +16,31 @@
 // `InMemorySharedPreferencesAsync` so the default
 // `SharedPreferencesAsync()` construction never throws. Every case ends
 // with `await cw.dispose()` cleanup, mirroring `flutter_init_test.dart`.
+// ignore_for_file: deprecated_member_use
+// (the deprecated `env` ctor arg and legacy `prefs:`/`prefixCache:` params
+// are passed deliberately: they still feed construction + the legacy-row
+// migration path under test.)
+import 'dart:convert';
+
 import 'package:configwire_flutter/configwire_flutter.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
+/// Realistic SDK-key fixture (`'cw-'` + 24 base62).
+const kApiKeyA = 'cw-0123456789ABCDEFGHJKLMNP';
+
+/// First-8 prefix of the fixture above.
+const kPrefixA = 'cw-01234';
+
 ConfigWire _testClient({Map<String, Object?> defaults = const {}}) {
   return ConfigWire(
-    apiKey: 'sk-test',
+    apiKey: kApiKeyA,
     env: 'dev',
     baseUrl: 'http://127.0.0.1:8090',
     defaults: defaults,
-    store: SharedPreferencesCacheStore(env: 'dev'),
+    store: SharedPreferencesCacheStore(apiKey: kApiKeyA),
   );
 }
 
@@ -40,7 +52,7 @@ void main() {
 
   test('(a) createConfigWire resolves anonymous targeting', () async {
     var cw = await ConfigWireFlutter.createConfigWire(
-      apiKey: 'sk-test',
+      apiKey: kApiKeyA,
       env: 'dev',
       baseUrl: 'http://127.0.0.1:8090',
       customAttrs: const {'plan': 'pro'},
@@ -53,7 +65,7 @@ void main() {
 
     // Relaunch resolves identically: still anonymous, still no identity.
     cw = await ConfigWireFlutter.createConfigWire(
-      apiKey: 'sk-test',
+      apiKey: kApiKeyA,
       env: 'dev',
       baseUrl: 'http://127.0.0.1:8090',
       customAttrs: const {'plan': 'pro'},
@@ -66,7 +78,7 @@ void main() {
 
   test('(a) createConfigWire carries customAttrs by default', () async {
     final cw = await ConfigWireFlutter.createConfigWire(
-      apiKey: 'sk-test',
+      apiKey: kApiKeyA,
       env: 'dev',
       baseUrl: 'http://127.0.0.1:8090',
       customAttrs: const {'plan': 'pro'},
@@ -78,11 +90,57 @@ void main() {
     await cw.dispose();
   });
 
+  test('(a) createConfigWire migrates a seeded legacy env-keyed row', () async {
+    // Pre-prefix install row under the legacy env namespace.
+    final prefs = SharedPreferencesAsync();
+    final legacy = CacheData(
+      etag: 'e1',
+      version: 3,
+      fetchedAt: DateTime.utc(2026, 9, 22),
+      values: const {'launch_flag': true},
+      bucket: 42,
+    );
+    await prefs.setString('configwire.dev.cache', jsonEncode(legacy.toJson()));
+
+    final cw = await ConfigWireFlutter.createConfigWire(
+      apiKey: kApiKeyA,
+      env: 'dev',
+      baseUrl: 'http://127.0.0.1:8090',
+      collectDevice: false,
+      ensureInitialized: false,
+    );
+    // No cold start: the legacy row moved to the prefix-namespaced key.
+    final row = await cw.store.load();
+    expect(row, isNotNull);
+    expect(row!.bucket, equals(42));
+    expect(row.etag, equals('e1'));
+    expect(await prefs.getString('configwire.$kPrefixA.cache'), isNotNull);
+    expect(await prefs.getString('configwire.dev.cache'), isNull);
+    await cw.dispose();
+  });
+
+  test(
+    '(a) createConfigWire with null env builds an alias-only client',
+    () async {
+      final cw = await ConfigWireFlutter.createConfigWire(
+        apiKey: kApiKeyA,
+        baseUrl: 'http://127.0.0.1:8090',
+        collectDevice: false,
+        ensureInitialized: false,
+      );
+      expect(cw.env, isNull);
+      // No legacy namespace to migrate from: nothing seeded, nothing
+      // moved, cold start with no throw.
+      expect(await cw.store.load(), isNull);
+      await cw.dispose();
+    },
+  );
+
   test(
     '(b) configureFlutter(prefs:, prefixCache:) honors the custom key',
     () async {
       final customPrefs = SharedPreferencesAsync();
-      await customPrefs.setString('custom.dev.bucket', '9');
+      await customPrefs.setString('custom.$kPrefixA.bucket', '9');
 
       final first = _testClient();
       await first.configureFlutter(
@@ -92,7 +150,10 @@ void main() {
       );
       expect(first.targeting.toQueryParameters(), isNot(contains('userHash')));
       // Custom prefix isolates: the default key stays empty.
-      expect(await customPrefs.getString('configwire.dev.bucket'), isNull);
+      expect(
+        await customPrefs.getString('configwire.$kPrefixA.bucket'),
+        isNull,
+      );
       await first.dispose();
 
       final second = _testClient();
@@ -110,9 +171,9 @@ void main() {
     '(c) Memory-store + configureFlutter stays bucket-capable via fallback',
     () async {
       final prefs = SharedPreferencesAsync();
-      await prefs.setString('configwire.dev.bucket', '42');
+      await prefs.setString('configwire.$kPrefixA.bucket', '42');
       final first = ConfigWire(
-        apiKey: 'sk-test',
+        apiKey: kApiKeyA,
         env: 'dev',
         baseUrl: 'http://127.0.0.1:8090',
         store: MemoryCacheStore(),
@@ -125,7 +186,7 @@ void main() {
 
       // Relaunch with a fresh Memory store reuses the fallback bucket.
       final second = ConfigWire(
-        apiKey: 'sk-test',
+        apiKey: kApiKeyA,
         env: 'dev',
         baseUrl: 'http://127.0.0.1:8090',
         store: MemoryCacheStore(),
@@ -141,7 +202,7 @@ void main() {
     '(d) bare ConfigWire + configureFlutter gets the default store',
     () async {
       final cw = ConfigWire(
-        apiKey: 'sk-test',
+        apiKey: kApiKeyA,
         env: 'dev',
         baseUrl: 'http://127.0.0.1:8090',
       );
@@ -152,7 +213,7 @@ void main() {
 
       // Relaunch resolves identically.
       final relaunch = ConfigWire(
-        apiKey: 'sk-test',
+        apiKey: kApiKeyA,
         env: 'dev',
         baseUrl: 'http://127.0.0.1:8090',
       );

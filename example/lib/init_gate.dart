@@ -52,8 +52,9 @@ class _ConfigWireInitGateState extends State<ConfigWireInitGate> {
     try {
       final cw = ConfigWire(
         apiKey: apiKey,
-        // env written once here; configureFlutter attaches the default
-        // prefs store namespaced by this env.
+        // env path-validated against the SDK key (wrong-env 401s);
+        // configureFlutter attaches the default prefs store namespaced by
+        // the SDK-key prefix.
         env: env,
         baseUrl: baseUrl,
         defaults: AppConfig.defaults,

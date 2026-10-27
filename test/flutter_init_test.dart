@@ -1,10 +1,12 @@
 // ignore_for_file: deprecated_member_use
 // Compat: Targeting.country is deprecated in client/dart until next major;
-// read here to assert device wiring. Targeting is always anonymous: no
-// install ID is generated, persisted, or emitted; bucketing rides `?b=`.
+// read here to assert device wiring. The deprecated `env` ctor arg is
+// passed deliberately (still required by `ConfigWire`). Targeting is
+// always anonymous: no install ID is generated, persisted, or emitted;
+// bucketing rides `?b=`.
 // Suite for the bring-your-own flow:
 //
-//   final cw = ConfigWire(..., store: SharedPreferencesCacheStore(env: env));
+//   final cw = ConfigWire(..., store: SharedPreferencesCacheStore(apiKey: apiKey));
 //   await cw.configureFlutter(...);
 //
 // Configuring never fetches by default (targeting only — hermetic, no
@@ -46,13 +48,16 @@ class ThrowingCollector extends DeviceTargetingCollector {
   ) async => throw StateError('collector exploded');
 }
 
+/// Realistic SDK-key fixture (`'cw-'` + 24 base62).
+const kApiKeyA = 'cw-0123456789ABCDEFGHJKLMNP';
+
 ConfigWire _testClient({Map<String, Object?> defaults = const {}}) {
   return ConfigWire(
-    apiKey: 'sk-test',
+    apiKey: kApiKeyA,
     env: 'dev',
     baseUrl: 'http://127.0.0.1:8090',
     defaults: defaults,
-    store: SharedPreferencesCacheStore(env: 'dev'),
+    store: SharedPreferencesCacheStore(apiKey: kApiKeyA),
   );
 }
 
@@ -78,9 +83,9 @@ void main() {
   });
 
   test('store-backed client resolves anonymous targeting', () async {
-    final store = SharedPreferencesCacheStore(env: 'dev');
+    final store = SharedPreferencesCacheStore(apiKey: kApiKeyA);
     final cw = ConfigWire(
-      apiKey: 'sk-test',
+      apiKey: kApiKeyA,
       env: 'dev',
       baseUrl: 'http://127.0.0.1:8090',
       store: store,
@@ -123,7 +128,7 @@ void main() {
 
   test('custom memory store configures anonymously', () async {
     final cw = ConfigWire(
-      apiKey: 'sk-test',
+      apiKey: kApiKeyA,
       env: 'dev',
       baseUrl: 'http://127.0.0.1:8090',
       store: MemoryCacheStore(),
@@ -140,7 +145,7 @@ void main() {
 
   test('bare ConfigWire gets a default prefs store', () async {
     final cw = ConfigWire(
-      apiKey: 'sk-test',
+      apiKey: kApiKeyA,
       env: 'dev',
       baseUrl: 'http://127.0.0.1:8090',
     );
@@ -209,13 +214,13 @@ void main() {
 
   test('store param upgrades a ConfigWire built without one', () async {
     final cw = ConfigWire(
-      apiKey: 'sk-test',
+      apiKey: kApiKeyA,
       env: 'dev',
       baseUrl: 'http://127.0.0.1:8090',
     );
     await cw.configureFlutter(
       collectDevice: false,
-      store: SharedPreferencesCacheStore(env: 'dev'),
+      store: SharedPreferencesCacheStore(apiKey: kApiKeyA),
     );
     expect(cw.store is SharedPreferencesCacheStore, isTrue);
     await cw.dispose();

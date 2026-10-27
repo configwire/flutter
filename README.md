@@ -40,7 +40,6 @@ import 'package:configwire_flutter/configwire_flutter.dart';
 Future<void> main() async {
   final cw = ConfigWire(
     apiKey: 'YOUR_SDK_KEY', // sent as X-ConfigWire-Key, never printed
-    env: 'dev',
     baseUrl: 'http://127.0.0.1:8090',
     defaults: {'launch_flag': false},
   );
@@ -107,20 +106,38 @@ or missing `?b=`.
 The bucket gets prefs-fallback discipline:
 prefs-backed stores carry it in the namespaced cache row, while
 session-only stores (e.g. `MemoryCacheStore`) mirror it through prefs
-under `<prefix>.<env>.bucket` and merge it back into bucket-less rows —
+under `<prefix>.<namespace>.bucket` (`namespace` is the first 8 chars of
+the SDK key when `apiKey:` is given, else the legacy `env` string
+verbatim) and merge it back into bucket-less rows —
 the wrapper never invents a bucket, only preserves the server-minted one.
 On logout/user-switch call `ConfigWireFlutter.clearBucket(cw)` (the
 Flutter mirror of `cw.clearBucket()`): it nulls the in-memory bucket,
 re-persists the row with `bucket: null`, and removes the prefs fallback
 key, so the next fetch sends no `?b=`.
 
+Rows are dual-namespaced: the cache row is `<prefix>.<namespace>.cache`
+(e.g. `configwire.cw-01234.cache` for `apiKey:`, `configwire.dev.cache`
+for legacy `env:`) and the non-prefs fallback is
+`<prefix>.<namespace>.bucket`. With `apiKey:` only the 8-char prefix
+appears in prefs key names — the full SDK key is never persisted or
+logged. Old `env:`-constructed code compiles and behaves exactly as
+before (byte-identical keys); `apiKey:` is opt-in, and when both are
+known each SDK key gets its own row, so rotating keys starts cold by
+design. Distinct SDK keys sharing a first-8 prefix share rows and buckets, so rotation reusing a prefix reuses the bucket.
+
 Bare `ConfigWire(...)` plus `configureFlutter()` gets disk persistence
 via an auto-attached
-`SharedPreferencesCacheStore(env: cw.env)` honoring legacy
+`SharedPreferencesCacheStore(apiKey: cw.apiKey, env: cw.env)` honoring legacy
 `prefs:`/`prefixCache:`. Store precedence: explicit
 `store:` param > explicit ctor store > auto-attached
-`SharedPreferencesCacheStore(env: cw.env)`. Identity is the stable
-`?b=` bucket, not an install ID.
+`SharedPreferencesCacheStore(apiKey: cw.apiKey, env: cw.env)`. Identity is the stable
+`?b=` bucket, not an install ID. Upgrading installs keep their buckets: the
+`configureFlutter` auto-attach path and the deprecated `createConfigWire`
+factory perform a one-time move of legacy
+`<prefix>.<env>.cache`/`.bucket` rows to the prefix-namespaced keys
+(manually-constructed stores never migrate — same key shares the row,
+a key with no prior row starts cold, and a cross-namespace upgrade
+without both known starts cold).
 
 ## Migrating from 0.2.x
 
@@ -142,7 +159,7 @@ final cw = await ConfigWireFlutter.createConfigWire(
 
 // Preferred:
 final cw = ConfigWire(
-  apiKey: apiKey, env: env, baseUrl: baseUrl,
+  apiKey: apiKey, baseUrl: baseUrl,
   defaults: const {},
 );
 await cw.configureFlutter(customAttrs: {'plan': 'pro'});
@@ -155,7 +172,8 @@ call `ensureInitialized` explicitly.)
 
 **2. `prefs:` / `prefixCache:` (optional)** — these still work and still
 govern the namespaced cache/bucket keys verbatim. New code should prefer the store
-(`SharedPreferencesCacheStore(env:…, prefixCache:…)`) with the `store:`
+(`SharedPreferencesCacheStore(apiKey:…, prefixCache:…)` or legacy
+`SharedPreferencesCacheStore(env:…, prefixCache:…)`) with the `store:`
 param instead; an explicit legacy `prefs:` or non-default `prefixCache:`
 continues to win for those keys.
 

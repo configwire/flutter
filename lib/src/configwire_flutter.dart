@@ -1,5 +1,5 @@
 // ignore_for_file: prefer_initializing_formals
-// (decorator ctor params `inner`/`prefs`/`env` keep their public names for
+// (decorator ctor params `inner`/`prefs` keep their public names for
 // the call-site API; the backing fields are intentionally private, so no
 // initializing formal.)
 import 'package:configwire/configwire.dart';
@@ -44,8 +44,11 @@ import 'prefs_store.dart';
 /// [SharedPreferencesAsync] and nothing identity-like is restored on
 /// later launches. Bucketing rides the stable `?b=` slot.
 ///
-/// Prefs keys share the `<prefixCache>.<env>.<suffix>` scheme (`suffix` is
-/// `cache` for values, `bucket` for the non-prefs fallback); pass a custom
+/// Prefs keys share the `<prefixCache>.<namespace>.<suffix>` scheme
+/// (`namespace` is the [SharedPreferencesCacheStore] namespace: the first
+/// 8 chars of the SDK key when `apiKey:` is given, else the legacy `env`
+/// string verbatim; `suffix` is `cache` for values, `bucket` for the
+/// non-prefs fallback); pass a custom
 /// [prefixCache] (deprecated, use `store:` instead) to isolate multiple SDK
 /// instances in one app. Prefs-backed stores carry the stable `?b=`
 /// bucket in the cache row; non-prefs stores mirror it through the
@@ -129,18 +132,33 @@ abstract final class ConfigWireFlutter {
   }) async {
     // Apply store before any cache load; late calls are ignored by setStore.
     // Explicit `store:` param wins; otherwise attach the default prefs
-    // store (namespaced by cw.env, honoring legacy prefs/prefixCache) only
-    // when no explicit store exists — single source of truth, no env
-    // duplication, no dual-backend split.
+    // store (namespaced by SDK-key prefix with the legacy env known for
+    // migration, honoring legacy prefs/prefixCache) only when no explicit
+    // store exists — single source of truth, no dual-backend split.
     if (store != null) {
       cw.setStore(store);
     } else if (!cw.hasExplicitStore) {
-      cw.setStore(
-        SharedPreferencesCacheStore(
-          prefs: prefs,
-          env: cw.env,
-          prefixCache: prefixCache,
-        ),
+      final auto = SharedPreferencesCacheStore(
+        prefs: prefs,
+        apiKey: cw.apiKey,
+        env: cw.env,
+        prefixCache: prefixCache,
+      );
+      cw.setStore(auto);
+      // One-time legacy move (bucket preservation): env-keyed rows from
+      // pre-prefix releases live on this same backend under the `cw.env`
+      // namespace. When the new key is absent and the legacy row
+      // exists, copy it over then drop the legacy key — same for the
+      // `.bucket` fallback key. Best-effort/swallowed (blocked storage
+      // degrades to a cold start, matching existing discipline).
+      // Manually-constructed stores never migrate (documented cold start)
+      // — except the `createConfigWire` factory below, which runs this
+      // same move explicitly for its own store.
+      await _migrateLegacyKeys(
+        prefs: auto.prefs,
+        prefixCache: prefixCache,
+        env: cw.env,
+        apiKey: cw.apiKey,
       );
     }
     // Stable-bucket fallback for non-prefs backing stores: a prefs-backed
@@ -148,7 +166,7 @@ abstract final class ConfigWireFlutter {
     // but session-only stores (e.g. `MemoryCacheStore`) have no row
     // lifecycle, so the bucket would be dropped on every restart. Wrap such
     // stores so the bucket mirrors through prefs under
-    // `'<prefixCache>.<env>.bucket'` and is
+    // `'<prefixCache>.<namespace>.bucket'` and is
     // merged back into bucket-less rows. An explicit legacy `prefs:` or
     // non-default `prefixCache:` wins for the fallback key.
     // The wrapper never invents a bucket: it only preserves the T5-managed
@@ -160,7 +178,7 @@ abstract final class ConfigWireFlutter {
         _BucketFallbackCacheStore(
           inner: attached,
           prefs: prefs ?? SharedPreferencesAsync(),
-          env: cw.env,
+          apiKey: cw.apiKey,
           prefixCache: prefixCache,
         ),
       );
@@ -191,6 +209,11 @@ abstract final class ConfigWireFlutter {
   /// Deprecated: construct your own [ConfigWire] and call
   /// `await cw.configureFlutter(...)` instead.
   ///
+  /// [env] is optional (nullable, defaults to null): null builds an
+  /// alias-only client (key-only SDK paths, needs a dual-serve server)
+  /// with no legacy migration; a non-null value keeps the legacy paths
+  /// (old and new servers). Forwarded as-is to [ConfigWire].
+  ///
   /// Note the default flip: `createConfigWire` fetches unless
   /// `ensureInitialized: false`, while `configureFlutter` only targets
   /// unless `ensureInitialized: true` — to preserve this method's
@@ -199,7 +222,7 @@ abstract final class ConfigWireFlutter {
   /// final cw = ConfigWire(
   ///   apiKey: apiKey, env: env, baseUrl: baseUrl, defaults: defaults,
   ///   store: SharedPreferencesCacheStore(
-  ///     env: env, prefixCache: prefixCache,
+  ///     apiKey: apiKey, prefixCache: prefixCache,
   ///   ),
   /// );
   /// await cw.configureFlutter(customAttrs: customAttrs);
@@ -208,7 +231,7 @@ abstract final class ConfigWireFlutter {
   @Deprecated('Use your own ConfigWire + cw.configureFlutter() instead')
   static Future<ConfigWire> createConfigWire({
     required String apiKey,
-    required String env,
+    String? env,
     required String baseUrl,
     Map<String, Object?> defaults = const {},
     Map<String, Object?>? customAttrs,
@@ -227,12 +250,23 @@ abstract final class ConfigWireFlutter {
       defaults: defaults,
       store: SharedPreferencesCacheStore(
         prefs: prefs,
+        apiKey: apiKey,
         env: env,
         prefixCache: prefixCache,
       ),
       minimumFetchInterval: minimumFetchInterval ?? const Duration(hours: 12),
       fetchTimeout: fetchTimeout ?? const Duration(seconds: 60),
       verbose: verbose,
+    );
+    // Same one-time legacy move the auto-attach path runs (which this
+    // factory bypasses via its explicit store): without it, upgrades cold
+    // start on a fresh bucket. Runs before configure so any cache load
+    // below already sees the migrated row.
+    await _migrateLegacyKeys(
+      prefs: prefs,
+      prefixCache: prefixCache,
+      env: env,
+      apiKey: apiKey,
     );
     await _configureFlutter(
       cw,
@@ -257,7 +291,7 @@ abstract final class ConfigWireFlutter {
   /// prefs-backed) and the resolved legacy backend, so a stray fallback
   /// from an earlier configuration can never resurrect. Row-wins
   /// precedence and reinstall-wipes-row semantics are untouched; clearing
-  /// one env never touches another. Never throws: blocked storage
+  /// one namespace never touches another. Never throws: blocked storage
   /// degrades to a memory-only clear. Pass the same `prefs:` /
   /// `prefixCache:` used at configure time when a legacy override was
   /// used for the fallback key.
@@ -271,6 +305,7 @@ abstract final class ConfigWireFlutter {
     if (attached is SharedPreferencesCacheStore) {
       await clearPersistedBucket(
         prefs: attached.prefs,
+        apiKey: attached.apiKey,
         env: attached.env,
         prefixCache: attached.prefixCache,
       );
@@ -282,6 +317,7 @@ abstract final class ConfigWireFlutter {
             : SharedPreferencesAsync());
     await clearPersistedBucket(
       prefs: fallbackPrefs,
+      apiKey: cw.apiKey,
       env: cw.env,
       prefixCache: prefixCache,
     );
@@ -300,9 +336,9 @@ extension ConfigWireFlutterExtension on ConfigWire {
   /// One-shot Flutter init for this [ConfigWire].
   ///
   /// A [ConfigWire] built without an explicit store gets a default
-  /// [SharedPreferencesCacheStore] namespaced by `cw.env` (single source
-  /// of truth, no env duplication; legacy `prefs:`/`prefixCache:` are
-  /// honored for the auto-attached store). Precedence is explicit `store:`
+  /// [SharedPreferencesCacheStore] namespaced by SDK-key prefix (with the
+  /// legacy env known for the one-time migration; legacy `prefs:`/`prefixCache:`
+  /// are honored for the auto-attached store). Precedence is explicit `store:`
   /// param > explicit ctor store > auto-default. Applied via
   /// [ConfigWire.setStore] before any cache load. Late calls are ignored.
   ///
@@ -339,18 +375,25 @@ extension ConfigWireFlutterExtension on ConfigWire {
 }
 
 /// Prefs key for the stable-bucket fallback:
-/// `'<prefixCache>.<Uri.encodeComponent(env)>.bucket'`
-/// (default prefix `'configwire'`, e.g. `'configwire.dev.bucket'`).
+/// `'<prefixCache>.<Uri.encodeComponent(namespace)>.bucket'` where
+/// `namespace` is the store namespace ([storeNamespaceFor]: the first 8
+/// chars of the SDK key when `apiKey:` is given, else the legacy `env`
+/// string verbatim; default prefix `'configwire'`, e.g.
+/// `'configwire.cw-01234.bucket'`).
 ///
-/// Same `<prefixCache>.<env>` namespacing as the cache row; only the suffix
-/// differs (`bucket` vs the cache row's `cache`). Used solely for
+/// Only the namespace segment appears in the key name — the full SDK key
+/// is never persisted or logged (same non-sensitive status as the
+/// server's `key_prefix` log field).
+///
+/// Same namespacing as the cache row; only the suffix differs (`bucket`
+/// vs the cache row's `cache`). Used solely for
 /// non-prefs backing stores, whose cache rows are session-only — prefs
 /// backed stores carry the bucket in the row itself and never touch this
 /// key, so the two sources can never fork.
 String _bucketKeyFor({
-  required String env,
+  required String namespace,
   String prefixCache = 'configwire',
-}) => '$prefixCache.${Uri.encodeComponent(env)}.bucket';
+}) => '$prefixCache.${Uri.encodeComponent(namespace)}.bucket';
 
 /// Canonical bucket validation: plain `0`-`9999` ints only.
 /// Wrong shapes and out-of-range values parse as absent (null), mirroring
@@ -364,12 +407,12 @@ bool _isCanonicalBucket(Object? raw) => raw is int && raw >= 0 && raw <= 9999;
 /// absent). Blocked storage degrades to load-absent: never throws.
 Future<int?> _loadPersistedBucket({
   required SharedPreferencesAsync prefs,
-  required String env,
+  required String namespace,
   String prefixCache = 'configwire',
 }) async {
   try {
     final raw = await prefs.getString(
-      _bucketKeyFor(env: env, prefixCache: prefixCache),
+      _bucketKeyFor(namespace: namespace, prefixCache: prefixCache),
     );
     if (raw == null) return null;
     final parsed = int.tryParse(raw);
@@ -389,12 +432,12 @@ Future<int?> _loadPersistedBucket({
 /// instead, so stale fallbacks can never resurrect past their row.
 Future<void> _savePersistedBucket({
   required SharedPreferencesAsync prefs,
-  required String env,
+  required String namespace,
   required int? bucket,
   String prefixCache = 'configwire',
 }) async {
   try {
-    final key = _bucketKeyFor(env: env, prefixCache: prefixCache);
+    final key = _bucketKeyFor(namespace: namespace, prefixCache: prefixCache);
     if (bucket != null && _isCanonicalBucket(bucket)) {
       await prefs.setString(key, bucket.toString());
     } else {
@@ -407,15 +450,73 @@ Future<void> _savePersistedBucket({
 
 /// Removes the persisted fallback bucket. Swallows ALL errors so callers
 /// never observe a throw (same never-throws bucket discipline as above).
+///
+/// Dual namespace like [SharedPreferencesCacheStore]: pass `apiKey:` (only
+/// its [keyPrefixOf] prefix appears in the prefs key name — the full key
+/// is never persisted or logged) or the legacy `env:` (verbatim); at
+/// least one is required (a runtime [ArgumentError] when both are absent;
+/// note this helper swallows it by design — see below). When both are
+/// given, `apiKey` wins.
+/// Manually-constructed stores never migrate legacy env-keyed rows
+/// (documented cold start) — only the `configureFlutter` auto-attach path
+/// and the deprecated `createConfigWire` factory perform the one-time
+/// legacy move.
 Future<void> clearPersistedBucket({
   required SharedPreferencesAsync prefs,
-  required String env,
+  String? apiKey,
+  String? env,
   String prefixCache = 'configwire',
 }) async {
   try {
-    await prefs.remove(_bucketKeyFor(env: env, prefixCache: prefixCache));
+    await prefs.remove(
+      _bucketKeyFor(
+        namespace: storeNamespaceFor(apiKey: apiKey, env: env),
+        prefixCache: prefixCache,
+      ),
+    );
   } catch (_) {
     // Swallow: blocked storage degrades to clear-noop by design.
+  }
+}
+
+/// One-time legacy move for the auto-attach path: copies a pre-prefix
+/// env-keyed row (and its `.bucket` fallback key) to the SDK-key-prefix
+/// namespaced keys, then removes the legacy keys. Only when the new key is
+/// absent and the legacy row exists; never clobbers fresh data. Swallows
+/// ALL errors so blocked storage degrades to a cold start by design.
+/// A null [env] means there is no legacy namespace to migrate from.
+Future<void> _migrateLegacyKeys({
+  required SharedPreferencesAsync prefs,
+  required String prefixCache,
+  required String? env,
+  required String apiKey,
+}) async {
+  if (env == null || env.isEmpty) return;
+  final prefix = keyPrefixOf(apiKey);
+  final legacyCacheKey = '$prefixCache.${Uri.encodeComponent(env)}.cache';
+  final nextCacheKey = '$prefixCache.${Uri.encodeComponent(prefix)}.cache';
+  final legacyBucketKey = '$prefixCache.${Uri.encodeComponent(env)}.bucket';
+  final nextBucketKey = '$prefixCache.${Uri.encodeComponent(prefix)}.bucket';
+  if (legacyCacheKey == nextCacheKey && legacyBucketKey == nextBucketKey) {
+    return;
+  }
+  try {
+    if (await prefs.getString(nextCacheKey) == null) {
+      final legacy = await prefs.getString(legacyCacheKey);
+      if (legacy != null) {
+        await prefs.setString(nextCacheKey, legacy);
+        await prefs.remove(legacyCacheKey);
+      }
+    }
+    if (await prefs.getString(nextBucketKey) == null) {
+      final legacyBucket = await prefs.getString(legacyBucketKey);
+      if (legacyBucket != null) {
+        await prefs.setString(nextBucketKey, legacyBucket);
+        await prefs.remove(legacyBucketKey);
+      }
+    }
+  } catch (_) {
+    // Swallow: blocked storage degrades to a cold start by design.
   }
 }
 
@@ -442,16 +543,17 @@ class _BucketFallbackCacheStore implements CacheStore {
   _BucketFallbackCacheStore({
     required CacheStore inner,
     required SharedPreferencesAsync prefs,
-    required String env,
+    String? apiKey,
+    String? env,
     String prefixCache = 'configwire',
   }) : _inner = inner,
        _prefs = prefs,
-       _env = env,
+       _namespace = storeNamespaceFor(apiKey: apiKey, env: env),
        _prefixCache = prefixCache;
 
   final CacheStore _inner;
   final SharedPreferencesAsync _prefs;
-  final String _env;
+  final String _namespace;
   final String _prefixCache;
 
   @override
@@ -459,7 +561,7 @@ class _BucketFallbackCacheStore implements CacheStore {
     final row = await _inner.load();
     final fallback = await _loadPersistedBucket(
       prefs: _prefs,
-      env: _env,
+      namespace: _namespace,
       prefixCache: _prefixCache,
     );
     if (fallback == null) return row;
@@ -488,7 +590,7 @@ class _BucketFallbackCacheStore implements CacheStore {
     await _inner.save(data);
     await _savePersistedBucket(
       prefs: _prefs,
-      env: _env,
+      namespace: _namespace,
       bucket: data.bucket,
       prefixCache: _prefixCache,
     );
