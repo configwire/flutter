@@ -141,6 +141,7 @@ abstract final class ConfigWireFlutter {
       final auto = SharedPreferencesCacheStore(
         prefs: prefs,
         apiKey: cw.apiKey,
+        // ignore: deprecated_member_use
         env: cw.env,
         prefixCache: prefixCache,
       );
@@ -157,6 +158,7 @@ abstract final class ConfigWireFlutter {
       await _migrateLegacyKeys(
         prefs: auto.prefs,
         prefixCache: prefixCache,
+        // ignore: deprecated_member_use
         env: cw.env,
         apiKey: cw.apiKey,
       );
@@ -318,6 +320,7 @@ abstract final class ConfigWireFlutter {
     await clearPersistedBucket(
       prefs: fallbackPrefs,
       apiKey: cw.apiKey,
+      // ignore: deprecated_member_use
       env: cw.env,
       prefixCache: prefixCache,
     );
