@@ -119,11 +119,16 @@ Rows are dual-namespaced: the cache row is `<prefix>.<namespace>.cache`
 (e.g. `configwire.cw-01234.cache` for `apiKey:`, `configwire.dev.cache`
 for legacy `env:`) and the non-prefs fallback is
 `<prefix>.<namespace>.bucket`. With `apiKey:` only the 8-char prefix
-appears in prefs key names — the full SDK key is never persisted or
-logged. Old `env:`-constructed code compiles and behaves exactly as
-before (byte-identical keys); `apiKey:` is opt-in, and when both are
-known each SDK key gets its own row, so rotating keys starts cold by
-design. Distinct SDK keys sharing a first-8 prefix share rows and buckets, so rotation reusing a prefix reuses the bucket.
+(`namespace` = first 8 chars of the SDK key, e.g. `cw-Ab12Cd`) appears
+in prefs key names — the full SDK key is never persisted or logged.
+Old `env:`-constructed code compiles and behaves exactly as before
+(byte-identical keys); `apiKey:` is opt-in. Key rotation and buckets:
+a new key with a NEW 8-char prefix gets its own row, so the next `200`
+mints a fresh `?b=` bucket (cold start, cohort reshuffles by design);
+distinct keys that happen to share the same first-8 prefix share one
+row and reuse the old bucket (no reshuffle). To force a clean cohort
+mint until the prefix differs; to keep the cohort stable keep the
+prefix. See `ROTATION.md` client notes.
 
 Bare `ConfigWire(...)` plus `configureFlutter()` gets disk persistence
 via an auto-attached

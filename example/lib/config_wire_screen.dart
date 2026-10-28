@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:configwire_flutter/configwire_flutter.dart';
 import 'package:flutter/material.dart';
 
@@ -44,9 +46,13 @@ class _ConfigWireScreenState extends State<ConfigWireScreen> {
 
   @override
   void dispose() {
-    // Cancel the stream subscription; ConfigWire.dispose() is the caller's
-    // responsibility (handled by the init gate's dispose).
+    // Cancel the onUpdate subscription and stop the realtime poll/stream
+    // timer. ConfigWire.dispose() stays the init gate's responsibility,
+    // but disconnect here so removing this screen alone never leaks the
+    // periodic timer when the shared instance outlives the widget.
     _updateSub.cancel();
+    // Fire-and-forget: dispose() is sync, disconnect is best-effort.
+    unawaited(widget.cw.disconnectRealtime());
     super.dispose();
   }
 

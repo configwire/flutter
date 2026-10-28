@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:configwire_flutter/configwire_flutter.dart';
 import 'package:flutter/material.dart';
 
@@ -100,12 +102,16 @@ class _ConfigWireInitGateState extends State<ConfigWireInitGate> {
 
   @override
   void dispose() {
-    // Owns the ConfigWire lifetime: dispose it when the gate leaves the tree.
-    // Controllers are in-memory only (never persisted).
+    // Owns the ConfigWire lifetime: dispose it when the gate leaves the tree
+    // (dispose closes realtime + onUpdate + HTTP client). Controllers are
+    // in-memory only (never persisted).
     _baseUrlController.dispose();
     _apiKeyController.dispose();
     _envController.dispose();
-    _cw?.dispose();
+    // Sync dispose cannot await: fire-and-forget, never throws.
+    final cw = _cw;
+    _cw = null;
+    if (cw != null) unawaited(cw.dispose());
     super.dispose();
   }
 
