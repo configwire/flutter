@@ -6,7 +6,8 @@ import 'package:configwire_flutter/configwire_flutter.dart';
 Future<void> main() async {
   final cw = ConfigWire(
     apiKey: 'YOUR_SDK_KEY', // sent as X-ConfigWire-Key, never printed
-    env: 'dev', // path-validated against the SDK key (wrong-env 401s);
+    // No `env:` — the environment resolves from the SDK key over the
+    // key-only aliases (needs a dual-serve server).
     // the default store attached by configureFlutter is namespaced by
     // the SDK-key prefix, so each key gets its own cache row.
     baseUrl: 'http://127.0.0.1:8090',

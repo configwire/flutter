@@ -15,12 +15,13 @@ void main() {
     testWidgets('shows server config form on boot', (tester) async {
       // The init gate boots to an editable server-config form prefilled
       // from AppConfig defaults — no rebuild needed to point at a server.
+      // The environment resolves from the SDK key (no env field).
       await tester.pumpWidget(const ConfigWireExampleApp());
       expect(find.text('Server config'), findsOneWidget);
       expect(find.text('Connect'), findsOneWidget);
       expect(find.text('Base URL'), findsOneWidget);
       expect(find.text('API key'), findsOneWidget);
-      expect(find.text('Environment'), findsOneWidget);
+      expect(find.text('Environment'), findsNothing);
     });
   });
 
@@ -29,10 +30,9 @@ void main() {
 
     setUp(() async {
       // Build a hermetic ConfigWire instance: no real fetch (ensureInitialized
-      // is skipped), in-memory store only.
+      // is skipped), in-memory store only. No `env:` — key-only aliases.
       cw = ConfigWire(
         apiKey: 'test-key',
-        env: 'test',
         baseUrl: 'http://localhost:9999',
         defaults: const {
           'welcome_message': 'Hello from defaults!',

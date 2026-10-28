@@ -23,7 +23,6 @@ class _ConfigWireInitGateState extends State<ConfigWireInitGate> {
     text: AppConfig.baseUrl,
   );
   late final _apiKeyController = TextEditingController(text: AppConfig.apiKey);
-  late final _envController = TextEditingController(text: AppConfig.env);
 
   ConfigWire? _cw;
   String? _error;
@@ -32,9 +31,8 @@ class _ConfigWireInitGateState extends State<ConfigWireInitGate> {
   Future<void> _connect() async {
     final baseUrl = _baseUrlController.text.trim();
     final apiKey = _apiKeyController.text.trim();
-    final env = _envController.text.trim();
-    if (baseUrl.isEmpty || apiKey.isEmpty || env.isEmpty) {
-      setState(() => _error = 'baseUrl, apiKey, and env must not be empty.');
+    if (baseUrl.isEmpty || apiKey.isEmpty) {
+      setState(() => _error = 'baseUrl and apiKey must not be empty.');
       return;
     }
     setState(() {
@@ -54,10 +52,9 @@ class _ConfigWireInitGateState extends State<ConfigWireInitGate> {
     try {
       final cw = ConfigWire(
         apiKey: apiKey,
-        // env path-validated against the SDK key (wrong-env 401s);
-        // configureFlutter attaches the default prefs store namespaced by
-        // the SDK-key prefix.
-        env: env,
+        // No `env:` — the environment resolves from the SDK key over the
+        // key-only aliases (needs a dual-serve server); configureFlutter
+        // attaches the default prefs store namespaced by the SDK-key prefix.
         baseUrl: baseUrl,
         defaults: AppConfig.defaults,
         verbose: true, // prints debug lines to the console
@@ -107,7 +104,6 @@ class _ConfigWireInitGateState extends State<ConfigWireInitGate> {
     // in-memory only (never persisted).
     _baseUrlController.dispose();
     _apiKeyController.dispose();
-    _envController.dispose();
     // Sync dispose cannot await: fire-and-forget, never throws.
     final cw = _cw;
     _cw = null;
@@ -195,15 +191,6 @@ class _ConfigWireInitGateState extends State<ConfigWireInitGate> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    TextField(
-                      controller: _envController,
-                      autocorrect: false,
-                      decoration: const InputDecoration(
-                        labelText: 'Environment',
-                        hintText: 'dev',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
                     if (_error != null) ...[
                       const SizedBox(height: 12),
                       Text(
