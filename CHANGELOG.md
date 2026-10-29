@@ -1,4 +1,4 @@
-## Unreleased
+## 0.3.0-rc.2
 
 * Compat: `SharedPreferencesCacheStore` is dual-namespaced — construct it
   with `apiKey:` (namespaced by its `keyPrefixOf` prefix,
@@ -28,6 +28,7 @@
   (defaults to null): null builds an alias-only client (key-only SDK
   paths, needs a dual-serve server) with no legacy migration; passing
   `env` keeps the legacy paths (old and new servers).
+  Requires `configwire ^0.4.0-rc.2` or later.
 
 ## 0.3.0-rc.1
 
